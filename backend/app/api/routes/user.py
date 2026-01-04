@@ -106,7 +106,7 @@ async def login_user(
             httponly=True,  # 防止 JavaScript 访问，抵御 XSS
             secure=True,  # 仅通过 HTTPS 传输（生产环境）
             samesite="lax",  # 防止 CSRF 攻击
-            max_age=settings.jwt_expire_seconds,  # Cookie 过期时间与 JWT 一致
+            max_age=settings.jwt_expire_minutes * 60,  # Cookie 过期时间与 JWT 一致（分钟转秒）
             path="/",  # Cookie 作用路径
         )
 
