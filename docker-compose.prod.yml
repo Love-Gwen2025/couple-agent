@@ -75,12 +75,24 @@ services:
       - OSS_ENDPOINT=${OSS_ENDPOINT:-}
       - OSS_CUSTOM_DOMAIN=${OSS_CUSTOM_DOMAIN:-}
       - OSS_OBJECT_PREFIX=${OSS_OBJECT_PREFIX:-}
+
+      # ==================== Langfuse 可观测性 ====================
+      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
     labels:
       # Watchtower 标签 - 启用自动更新
       - "com.centurylinklabs.watchtower.enable=true"
     # 注意: postgres 和 redis 是外部服务 (1panel-network)，不在此文件中定义
     networks:
       - 1panel-network
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8080/api/chat/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -88,7 +100,61 @@ services:
           memory: 1G
 
   # ----------------------------------------------------------------
-  # 2. Frontend 服务 (使用 GHCR 镜像)
+  # 2. Celery Worker - 异步任务处理
+  # ----------------------------------------------------------------
+  celery-worker:
+    image: ghcr.io/love-gwen2025/my-agent/backend:latest
+    container_name: my-agent-celery
+    restart: always
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4 -I app.tasks.document_tasks,app.tasks.embedding_tasks
+    environment:
+      # ==================== 应用基础 ====================
+      - APP_ENV=prod
+      - APP_NAME=my-agent-celery
+      - APP_LOG_LEVEL=info
+
+      # ==================== PostgreSQL 数据库 ====================
+      - DB_HOST=pg_vector
+      - DB_PORT=5432
+      - DB_NAME=my_agent
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-123456}
+
+      # ==================== Redis 缓存 ====================
+      - REDIS_HOST=redis_cache
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-123456}
+      - REDIS_DB=0
+
+      # ==================== Celery 消息队列 ====================
+      - CELERY_BROKER_DB=${CELERY_BROKER_DB:-1}
+      - CELERY_RESULT_DB=${CELERY_RESULT_DB:-2}
+
+      # ==================== Embedding 向量化 ====================
+      - AI_EMBEDDING_PROVIDER=${AI_EMBEDDING_PROVIDER:-local}
+      - AI_EMBEDDING_MODEL=${AI_EMBEDDING_MODEL:-BAAI/bge-small-zh-v1.5}
+      - AI_EMBEDDING_DIMENSION=${AI_EMBEDDING_DIMENSION:-512}
+
+      # ==================== OSS 对象存储 ====================
+      - OSS_ACCESS_KEY_ID=${OSS_ACCESS_KEY_ID}
+      - OSS_ACCESS_KEY_SECRET=${OSS_ACCESS_KEY_SECRET}
+      - OSS_BUCKET=${OSS_BUCKET:-}
+      - OSS_REGION=${OSS_REGION:-cn-hangzhou}
+      - OSS_ENDPOINT=${OSS_ENDPOINT:-}
+      - OSS_CUSTOM_DOMAIN=${OSS_CUSTOM_DOMAIN:-}
+      - OSS_OBJECT_PREFIX=${OSS_OBJECT_PREFIX:-}
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    networks:
+      - 1panel-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+
+  # ----------------------------------------------------------------
+  # 3. Frontend 服务 (使用 GHCR 镜像)
   # ----------------------------------------------------------------
   my-agent-frontend:
     image: ghcr.io/love-gwen2025/my-agent/frontend:latest
@@ -109,7 +175,7 @@ services:
           memory: 256M
 
   # ----------------------------------------------------------------
-  # 3. Watchtower - 自动更新容器
+  # 4. Watchtower - 自动更新容器
   # ----------------------------------------------------------------
   watchtower:
     image: containrrr/watchtower
