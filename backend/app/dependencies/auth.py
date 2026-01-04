@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import Cookie, Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 
 from app.core.redis import get_redis
 from app.core.settings import get_settings
@@ -26,14 +26,12 @@ class CurrentUser:
 async def get_current_user(
     token_header: Annotated[str | None, Header(alias="token")] = None,
     authorization: Annotated[str | None, Header()] = None,
-    token_cookie: Annotated[str | None, Cookie(alias="token")] = None,
     redis=Depends(get_redis),
 ):
     """
-    解析认证信息，支持多种方式（优先级从高到低）：
+    解析认证信息，支持两种方式（优先级从高到低）：
     1. Authorization Header (Bearer Token)
     2. token Header
-    3. token Cookie (HttpOnly，推荐)
 
     校验 JWT 并从 Redis 获取会话，未通过则返回 401。
     """
@@ -46,9 +44,6 @@ async def get_current_user(
     # 优先级2: token Header
     elif token_header:
         raw_token = token_header.strip()
-    # 优先级3: token Cookie (HttpOnly)
-    elif token_cookie:
-        raw_token = token_cookie.strip()
 
     if not raw_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")

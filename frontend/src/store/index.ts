@@ -121,23 +121,17 @@ export const useAppStore = create<AppState & AppActions>()(
       // 用户相关操作
       setUser: (user) => set({ user }),
       setToken: (token) => {
-        // 安全改进：优先使用 HttpOnly Cookie，localStorage 作为备用
-        // 注意：实际的 Token 已通过后端的 HttpOnly Cookie 设置
-        // 这里的 localStorage 仅用于标记登录状态（不存储实际 Token）
+        // 将 Token 存储到 localStorage，供请求拦截器使用
         if (token) {
-          // 存储一个标记而非实际 Token（用于前端判断登录状态）
-          localStorage.setItem('isLoggedIn', 'true');
+          localStorage.setItem('token', token);
         } else {
-          localStorage.removeItem('isLoggedIn');
+          localStorage.removeItem('token');
         }
-        // 注意：实际的 Token 存储在 HttpOnly Cookie 中，前端无法访问
-        // 这里的 token 状态仅用于 UI 显示
         set({ token });
       },
       logout: () => {
-        // 清除登录状态标记
-        localStorage.removeItem('isLoggedIn');
-        // 注意：HttpOnly Cookie 会由后端的 logout 接口清除
+        // 清除 localStorage 中的 Token
+        localStorage.removeItem('token');
         set({
           user: null,
           token: null,
