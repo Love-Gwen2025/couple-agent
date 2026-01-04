@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.router import api_router
 from app.core.checkpointer import close_checkpointer_pool, init_checkpointer_pool
 from app.core.context import RequestContextMiddleware
+from app.core.database_init import init_database
 from app.core.exceptions import AppException
 from app.core.logging import setup_logging
 from app.core.settings import get_settings
@@ -21,15 +22,22 @@ from app.services.embedding_service import EmbeddingService
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     settings = get_settings()
+
+    # 🆕 自动执行数据库迁移（使用 IF NOT EXISTS，可重复执行）
+    await init_database(settings)
+
     # 启动时初始化 checkpointer 连接池
     await init_checkpointer_pool(settings)
     logger.info("Checkpointer pool initialized")
+
     # 预加载 embedding 模型
     if settings.ai_embedding_provider == "local":
         embedding_service = EmbeddingService(settings)
         embedding_service.warmup()
         logger.info("Embedding model warmed up")
+
     yield
+
     # 关闭时清理连接池
     await close_checkpointer_pool()
     logger.info("Checkpointer pool closed")
