@@ -93,7 +93,11 @@ export function MessageBubble({
   const showBranchNav = isAssistant && siblingInfo && siblingInfo.total > 1;
 
   return (
-    <div className={clsx("flex gap-4 p-2 mb-2 group/row w-full", isUser ? "flex-row-reverse" : "flex-row")}>
+    <div
+      className={clsx("flex gap-4 p-2 mb-2 group/row w-full", isUser ? "flex-row-reverse" : "flex-row")}
+      aria-live={isStreaming ? "polite" : undefined}
+      aria-busy={isStreaming}
+    >
 
       {/* Avatar Area */}
       <div className="flex-shrink-0 mt-1">
@@ -199,12 +203,14 @@ export function MessageBubble({
               <button
                 className="p-1.5 hover:bg-surface-highlight rounded-md text-muted hover:text-foreground transition-colors"
                 title="Good response"
+                aria-label="好的回复"
               >
                 <ThumbsUp className="w-3.5 h-3.5" />
               </button>
               <button
                 className="p-1.5 hover:bg-surface-highlight rounded-md text-muted hover:text-foreground transition-colors"
                 title="Bad response"
+                aria-label="不好的回复"
               >
                 <ThumbsDown className="w-3.5 h-3.5" />
               </button>
@@ -216,18 +222,21 @@ export function MessageBubble({
                 )}
                 onClick={onRegenerate}
                 title="Regenerate"
+                aria-label="重新生成"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
               <button
                 className="p-1.5 hover:bg-surface-highlight rounded-md text-muted hover:text-foreground transition-colors"
                 title="Share"
+                aria-label="分享"
               >
                 <Share2 className="w-3.5 h-3.5" />
               </button>
               <button
                 className="p-1.5 hover:bg-surface-highlight rounded-md text-muted hover:text-foreground transition-colors"
                 title="More"
+                aria-label="更多选项"
               >
                 <MoreHorizontal className="w-3.5 h-3.5" />
               </button>
@@ -242,6 +251,7 @@ export function MessageBubble({
               onClick={onEdit}
               className="p-1.5 rounded-lg hover:bg-surface-highlight text-muted hover:text-primary transition-colors"
               title="Edit"
+              aria-label="编辑消息"
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>

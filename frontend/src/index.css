@@ -359,3 +359,57 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(var(--muted), 0.4);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   FOCUS STYLES (Accessibility)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 键盘焦点样式 - 仅在键盘导航时显示 */
+:focus-visible {
+  outline: 2px solid rgb(var(--primary));
+  outline-offset: 2px;
+}
+
+/* 移除默认焦点样式（鼠标点击时） */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* 按钮和交互元素的焦点样式 */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgb(var(--primary));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 暗色模式下的焦点样式调整 */
+[data-theme="dark"] :focus-visible {
+  outline-color: rgb(var(--primary));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   REDUCED MOTION (Accessibility)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 尊重用户的动画偏好设置 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-float,
+  .animate-pulse-soft,
+  .gradient-text-animated {
+    animation: none !important;
+  }
+}

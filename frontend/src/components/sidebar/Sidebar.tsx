@@ -1,10 +1,12 @@
 /**
  * Gemini Sidebar - Premium Colorful Edition
+ *
+ * 侧边栏组件，显示会话列表和用户信息
  */
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Plus, MessageSquare, Trash2, Menu, Settings, Pencil } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Menu, Settings, Pencil, type LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useAppStore } from '../../store';
+import { useAuthStore, useConversationStore, useUIStore } from '../../store';
 import { getConversations, createConversation, deleteConversation, updateConversationTitle } from '../../api';
 import clsx from 'clsx';
 import { UserProfileModal } from '../settings';
@@ -20,7 +22,7 @@ function SidebarItem({
   isCollapsed,
   colorClass = "text-muted"
 }: {
-  icon: any;
+  icon: LucideIcon;
   label: string;
   isActive?: boolean;
   onClick: () => void;
@@ -42,6 +44,7 @@ function SidebarItem({
         isCollapsed ? "justify-center w-12 h-12 px-0 mx-auto" : "w-full"
       )}
       title={isCollapsed ? label : undefined}
+      aria-current={isActive ? "page" : undefined}
     >
       <Icon className={clsx(
         "w-5 h-5 flex-shrink-0 transition-all duration-300",
@@ -65,6 +68,7 @@ function SidebarItem({
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
               className="p-1.5 hover:bg-primary/20 hover:text-primary rounded-full transition-all duration-200"
               title="重命名"
+              aria-label="重命名会话"
             >
               <Pencil className="w-4 h-4" />
             </button>
@@ -74,6 +78,7 @@ function SidebarItem({
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
               className="p-1.5 hover:bg-red-500/20 hover:text-red-500 rounded-full transition-all duration-200"
               title="删除"
+              aria-label="删除会话"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -97,19 +102,22 @@ export function Sidebar() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // 认证状态
+  const { token, user } = useAuthStore();
+
+  // 会话状态
   const {
     conversations,
     currentConversationId,
-    sidebarOpen,
-    toggleSidebar,
     setConversations,
     addConversation,
     removeConversation,
     updateConversation,
     setCurrentConversationId,
-    token,
-    user,
-  } = useAppStore();
+  } = useConversationStore();
+
+  // UI 状态
+  const { sidebarOpen, toggleSidebar } = useUIStore();
 
   useEffect(() => {
     if (token) loadConversations();
@@ -224,6 +232,8 @@ export function Sidebar() {
           whileTap={{ scale: 0.9 }}
           onClick={toggleSidebar}
           className="p-3 bg-white/[0.03] hover:bg-surface-highlight/20 rounded-2xl transition-all text-muted hover:text-purple-400"
+          aria-label={sidebarOpen ? "收起侧边栏" : "展开侧边栏"}
+          aria-expanded={sidebarOpen}
         >
           <Menu className="w-5 h-5" />
         </motion.button>

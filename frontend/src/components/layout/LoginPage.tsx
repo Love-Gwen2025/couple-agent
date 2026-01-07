@@ -1,10 +1,12 @@
 /**
  * 登录页面组件 - High-End Modern Edition
+ *
+ * 提供用户登录功能，支持自动注册
  */
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Sparkles, ArrowRight, User, Lock, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
-import { useAppStore } from '../../store';
+import { useAuthStore } from '../../store';
 import { login, register } from '../../api';
 import clsx from 'clsx';
 
@@ -16,7 +18,7 @@ interface LoginPageProps {
  * 登录页面
  */
 export function LoginPage({ onBack }: LoginPageProps) {
-  const { setUser, setToken } = useAppStore();
+  const { setUser, setToken } = useAuthStore();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -145,6 +147,8 @@ export function LoginPage({ onBack }: LoginPageProps) {
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-center gap-3 text-red-400 text-xs font-bold tracking-widest uppercase overflow-hidden"
+                  role="alert"
+                  aria-live="assertive"
                 >
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   {error}

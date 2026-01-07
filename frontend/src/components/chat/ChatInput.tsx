@@ -85,6 +85,8 @@ export function ChatInput({
                 : "hover:bg-white/[0.05] text-gray-400 hover:text-white"
             )}
             title={isDeepSearch ? "深度搜索模式（已开启）" : "切换到深度搜索模式"}
+            aria-label={isDeepSearch ? "关闭深度搜索模式" : "开启深度搜索模式"}
+            aria-pressed={isDeepSearch}
           >
             <Search className="w-5 h-5" />
           </button>
@@ -114,6 +116,7 @@ export function ChatInput({
                   whileTap={{ scale: 0.9 }}
                   className="p-2.5 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all"
                   onClick={onAbort}
+                  aria-label="停止生成"
                 >
                   <StopCircle className="w-6 h-6 fill-current" />
                 </motion.button>
@@ -135,6 +138,7 @@ export function ChatInput({
                       : "bg-white/5 text-gray-500"
                   )}
                   onClick={handleSend}
+                  aria-label="发送消息"
                 >
                   <Send className="w-5 h-5 ml-0.5" />
                 </motion.button>

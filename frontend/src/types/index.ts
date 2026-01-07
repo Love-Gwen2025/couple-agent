@@ -37,9 +37,9 @@ export interface Conversation {
 
 /** 消息信息 */
 export interface Message {
-  id: number | string;  // 兼容临时 ID (number) 和服务端 ID (string)
+  id: string;  // 消息 ID，统一使用 string（包括临时 ID 如 "temp-xxx"）
   conversationId: string;
-  senderId: number | string;  // 兼容 AI (-1) 和用户 ID (string)
+  senderId: number | string;  // 兼容 AI (-1) 和用户 ID
   role: 'user' | 'assistant' | 'system';
   content: string;
   contentType: string;
@@ -164,7 +164,7 @@ export interface StreamChatRequest {
 export interface StreamChatEvent {
   type: 'chunk' | 'done' | 'error' | 'tool_start' | 'tool_end';
   content?: string;
-  messageId?: number | string;
+  messageId?: string;
   conversationId?: string;
   tokenCount?: number;
   error?: string;

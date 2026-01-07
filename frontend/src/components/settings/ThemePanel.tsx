@@ -5,7 +5,7 @@
  * 面板定位在触发按钮上方，使用不透明背景
  */
 import { Sun, Moon, Monitor, X } from 'lucide-react';
-import { useAppStore } from '../../store';
+import { useUIStore } from '../../store';
 import {
     THEME_MODE_OPTIONS,
     type ThemeMode,
@@ -51,7 +51,7 @@ function getThemeModeIcon(mode: ThemeMode) {
  * 定位在触发按钮上方，不透明背景
  */
 export function ThemePanel({ isOpen, onClose, anchorRect }: ThemePanelProps) {
-    const { themeMode, setThemeMode } = useAppStore();
+    const { themeMode, setThemeMode } = useUIStore();
     const panelRef = useRef<HTMLDivElement>(null);
     const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
 
@@ -123,13 +123,17 @@ export function ThemePanel({ isOpen, onClose, anchorRect }: ThemePanelProps) {
                         transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
                         style={panelStyle}
                         className="w-72 glass-premium dual-stroke shadow-premium z-50 overflow-hidden rounded-[28px] bg-surface/95"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="theme-panel-title"
                     >
                         {/* 标题栏 */}
                         <div className="flex items-center justify-between px-5 py-4 border-b border-border/10 bg-surface/40">
-                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] italic">Visual Kernel</h3>
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] italic" id="theme-panel-title">Visual Kernel</h3>
                             <button
                                 onClick={onClose}
                                 className="p-1.5 rounded-xl hover:bg-white/10 transition-all active:scale-90"
+                                aria-label="关闭主题设置"
                             >
                                 <X className="w-3.5 h-3.5 text-gray-500" />
                             </button>
@@ -153,6 +157,9 @@ export function ThemePanel({ isOpen, onClose, anchorRect }: ThemePanelProps) {
                                                     ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/10 text-foreground shadow-lg shadow-purple-500/10 border border-purple-500/30'
                                                     : 'text-muted hover:text-foreground'
                                             )}
+                                            role="switch"
+                                            aria-checked={themeMode === option.value}
+                                            aria-label={`切换到${option.label === 'Auto' ? '跟随系统' : option.label}模式`}
                                         >
                                             <div className={clsx(
                                                 'p-1.5 rounded-lg transition-colors',

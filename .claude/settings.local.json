@@ -3,7 +3,13 @@
     "allow": [
       "Bash(grep:*)",
       "Bash(tree:*)",
-      "Bash(uuidgen:*)"
+      "Bash(uuidgen:*)",
+      "Bash(openspec list:*)",
+      "Bash(wc:*)",
+      "Skill(openspec:proposal)",
+      "Bash(openspec validate:*)",
+      "Skill(openspec:apply)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

@@ -1,12 +1,12 @@
 /**
  * 知识库详情页组件
- * 
+ *
  * 展示知识库的详细信息、统计数据和文档列表
  */
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Upload, Trash2, Download, Loader2, FileText, Layers, CheckCircle, XCircle, Clock, Search, TestTube } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAppStore } from '../../store';
+import { useNavigationStore } from '../../store';
 import {
     getKnowledgeBase,
     getDocuments,
@@ -57,7 +57,8 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function KnowledgeDetailPage() {
-    const { selectedKnowledgeBaseId, setCurrentPage } = useAppStore();
+    // 导航状态
+    const { selectedKnowledgeBaseId, setCurrentPage } = useNavigationStore();
     const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBase | null>(null);
     const [documents, setDocuments] = useState<Document[]>([]);
     const [isLoading, setIsLoading] = useState(true);

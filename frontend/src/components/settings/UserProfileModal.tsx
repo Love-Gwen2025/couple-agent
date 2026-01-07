@@ -1,3 +1,8 @@
+/**
+ * 用户资料设置弹窗组件
+ *
+ * 包含基础信息、隐私设置、个性外观三个标签页
+ */
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -6,7 +11,7 @@ import {
     Sun, Moon, Monitor
 } from 'lucide-react';
 import clsx from 'clsx';
-import { useAppStore } from '../../store';
+import { useAuthStore, useUIStore } from '../../store';
 import { uploadAvatar, updateProfile, changePassword } from '../../api/auth';
 import { THEME_MODE_OPTIONS } from '../../config/themes';
 
@@ -18,7 +23,11 @@ interface UserProfileModalProps {
 type TabType = 'basic' | 'privacy' | 'appearance';
 
 export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
-    const { user, setUser, themeMode, setThemeMode } = useAppStore();
+    // 认证状态
+    const { user, setUser } = useAuthStore();
+
+    // UI 状态
+    const { themeMode, setThemeMode } = useUIStore();
     const [activeTab, setActiveTab] = useState<TabType>('basic');
     const [isEditing, setIsEditing] = useState(false);
     const [isLoading, setIsLoading] = useState(false);

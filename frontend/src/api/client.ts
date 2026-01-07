@@ -5,7 +5,7 @@
  */
 import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import type { ApiResponse } from '../types';
-import { useAppStore } from '../store';
+import { useAuthStore, useConversationStore } from '../store';
 
 /** API 基础地址 */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
@@ -18,8 +18,10 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080
  * 3. 跳转到登录页重新获取登录态
  */
 export function handleUnauthorized(): void {
-  const { logout } = useAppStore.getState();
-  logout();
+  // 清除认证状态
+  useAuthStore.getState().logout();
+  // 清除会话数据
+  useConversationStore.getState().clearAll();
   window.location.href = '/login';
 }
 

@@ -51,7 +51,7 @@ async def init_checkpointer_pool(settings: Settings) -> None:
             open=False,
         )
         logger.info(
-            f"Checkpointer pool created: min_size=5, max_size=20, timeout=30s, health_check=enabled"
+            "Checkpointer pool created: min_size=5, max_size=20, timeout=30s, health_check=enabled"
         )
         await _pool.open()
         # 初始化表结构（需要在 autocommit 模式下执行，因为 CREATE INDEX CONCURRENTLY 不能在事务中运行）

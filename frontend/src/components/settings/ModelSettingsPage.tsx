@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Edit2, Trash2, Loader2, CheckCircle, XCircle, TestTube, Power, PowerOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
-import { useAppStore } from '../../store';
+import { useNavigationStore } from '../../store';
 import {
     getUserModels,
     createUserModel,
@@ -60,7 +60,8 @@ const PROVIDER_PARAMS: Record<string, {
 };
 
 export function ModelSettingsPage() {
-    const { setCurrentPage } = useAppStore();
+    // 导航状态
+    const { setCurrentPage } = useNavigationStore();
     const [models, setModels] = useState<UserModel[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);

@@ -1,9 +1,11 @@
 /**
  * 主布局组件
+ *
+ * 包含侧边栏和主内容区域
  */
 import { Sidebar } from '../sidebar';
 import { ChatPanel } from '../chat';
-import { useAppStore } from '../../store';
+import { useNavigationStore } from '../../store';
 import { KnowledgePage, KnowledgeDetailPage } from '../knowledge';
 import { ModelSettingsPage } from '../settings';
 import { Database, Bot } from 'lucide-react';
@@ -11,12 +13,12 @@ import { Database, Bot } from 'lucide-react';
 /**
  * 主布局组件
  *
- * Gemini Layout: 
+ * Gemini Layout:
  * - Sidebar: Collapsible, #f0f4f9 (light) / #1e1f20 (dark)
  * - Main: White (light) / #131314 (dark), rounded corners
  */
 export function MainLayout() {
-  const { currentPage, setCurrentPage } = useAppStore();
+  const { currentPage, setCurrentPage } = useNavigationStore();
 
   return (
     <div className="h-screen flex bg-background text-foreground overflow-hidden selection:bg-primary/20">

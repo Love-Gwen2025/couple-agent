@@ -8,14 +8,17 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, Bot, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAppStore } from '../../store';
+import { useAuthStore, useModelStore } from '../../store';
 import { getModels } from '../../api';
 import clsx from 'clsx';
 
 export function ModelSelector() {
-  // 使用 currentModelId 作为唯一标识（系统模型为 '0' 或 null，用户模型为实际 id）
-  const { models, currentModelId, setModels, setCurrentModelCode, setCurrentModelId, token } =
-    useAppStore();
+  // 认证状态
+  const { token } = useAuthStore();
+
+  // 模型状态（使用 currentModelId 作为唯一标识）
+  const { models, currentModelId, setModels, setCurrentModelCode, setCurrentModelId } =
+    useModelStore();
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {

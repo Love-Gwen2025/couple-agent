@@ -1,12 +1,12 @@
 /**
  * 知识库列表页组件
- * 
+ *
  * 以表格形式展示所有知识库，支持创建、删除和进入详情
  */
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Database, Trash2, TestTube, Loader2, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAppStore } from '../../store';
+import { useNavigationStore } from '../../store';
 import {
     getKnowledgeBases,
     createKnowledgeBase,
@@ -29,7 +29,8 @@ function formatTime(isoString: string | null): string {
 }
 
 export function KnowledgePage() {
-    const { setCurrentPage, openKnowledgeDetail } = useAppStore();
+    // 导航状态
+    const { setCurrentPage, openKnowledgeDetail } = useNavigationStore();
     const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isCreating, setIsCreating] = useState(false);

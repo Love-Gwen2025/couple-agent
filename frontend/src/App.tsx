@@ -1,9 +1,12 @@
 /**
  * 应用根组件
+ *
+ * 包含认证状态检查和主题初始化
  */
 import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useAppStore } from './store';
+import { MotionConfig } from 'framer-motion';
+import { useAuthStore, useUIStore } from './store';
 import { MainLayout, LoginPage, WelcomePage } from './components/layout';
 
 /** React Query 客户端 */
@@ -20,7 +23,12 @@ const queryClient = new QueryClient({
  * 应用入口组件
  */
 function AppContent() {
-  const { token, themeMode, accentColor } = useAppStore();
+  // 认证状态
+  const { token } = useAuthStore();
+
+  // UI 状态
+  const { themeMode, accentColor } = useUIStore();
+
   const [view, setView] = useState<'welcome' | 'login'>('welcome');
 
   /**
@@ -67,11 +75,14 @@ function AppContent() {
 
 /**
  * 应用根组件
+ * 包含 React Query 和 Framer Motion 配置
  */
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
+      <MotionConfig reducedMotion="user">
+        <AppContent />
+      </MotionConfig>
     </QueryClientProvider>
   );
 }
