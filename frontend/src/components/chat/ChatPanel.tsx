@@ -9,7 +9,6 @@ import { useSSEChat, useMessageTree } from '../../hooks';
 import { getConversationHistory } from '../../api';
 import { setCurrentMessage } from '../../api/branch';
 import { MessageList } from './MessageList';
-import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
 import { ModelSelector } from './ModelSelector';
 import { GreetingScreen } from './GreetingScreen';
