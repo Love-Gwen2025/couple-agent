@@ -82,6 +82,10 @@ services:
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
+    volumes:
+      # ==================== 挂载本地嵌入模型缓存 ====================
+      # 与 celery-worker 共享同一份模型缓存
+      - ${USERPROFILE:-.}/.cache/fastembed:/root/.cache/fastembed
     depends_on:
       postgres:
         condition: service_healthy
@@ -140,6 +144,13 @@ services:
       - OSS_ENDPOINT=${OSS_ENDPOINT}
       - OSS_CUSTOM_DOMAIN=${OSS_CUSTOM_DOMAIN:-}
       - OSS_OBJECT_PREFIX=${OSS_OBJECT_PREFIX:-}
+    volumes:
+      # ==================== 挂载本地嵌入模型缓存 ====================
+      # Windows 用户需先在本地下载模型：
+      #   pip install fastembed
+      #   python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-zh-v1.5')"
+      # 模型会下载到 ~/.cache/fastembed 目录
+      - ${USERPROFILE:-.}/.cache/fastembed:/root/.cache/fastembed
     depends_on:
       postgres:
         condition: service_healthy
