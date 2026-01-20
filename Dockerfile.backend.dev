@@ -1,0 +1,33 @@
+# ============================================
+# Python Backend Dockerfile - 开发版
+# 包含调试工具，供 Dev Container 使用
+# ============================================
+
+FROM python:3.12-slim
+
+# 使用阿里云镜像源加速（解决梯子网络与 deb 源的冲突）
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources
+
+# 安装开发工具 + uv 包管理器（合并为单个 RUN 减少镜像层）
+# wget: VS Code 服务端下载必需
+# git: 版本控制
+# procps: ps 命令（调试进程用）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    git \
+    procps \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install uv --quiet
+
+WORKDIR /workspace/backend
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1
+ENV APP_ENV=dev
+ENV PATH="/workspace/backend/.venv/bin:$PATH"
+
+# 暴露端口
+EXPOSE 8080
+
+# 默认保持容器运行（调试时手动启动服务）
+CMD ["sleep", "infinity"]

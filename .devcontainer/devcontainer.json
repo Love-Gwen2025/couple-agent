@@ -1,0 +1,37 @@
+{
+    "name": "My Agent Backend",
+    "dockerComposeFile": "docker-compose.devcontainer.yml",
+    "service": "backend-dev",
+    "workspaceFolder": "/workspace/backend",
+    // VS Code 扩展
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.debugpy",
+                "ms-python.vscode-pylance",
+                "charliermarsh.ruff"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/workspace/backend/.venv/bin/python",
+                "python.analysis.typeCheckingMode": "basic",
+                "editor.formatOnSave": true,
+                "[python]": {
+                    "editor.defaultFormatter": "charliermarsh.ruff"
+                }
+            }
+        }
+    },
+    // 容器启动后执行的命令
+    "postCreateCommand": "cd /workspace/backend && uv sync",
+    // 转发端口
+    "forwardPorts": [
+        8080,
+        5432,
+        6379
+    ],
+    // 功能增强
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {}
+    }
+}

@@ -1,0 +1,46 @@
+# Dev Container 专用配置
+# 继承主 docker-compose.yml，添加开发专用的后端服务
+
+include:
+  - path: ../docker-compose.yml
+
+services:
+  # 开发专用后端容器（不与主 backend 冲突）
+  backend-dev:
+    build:
+      context: ..
+      dockerfile: Dockerfile.backend.dev
+    container_name: my-agent-backend-dev
+    # 不启动服务，只保持容器运行（方便调试）
+    command: sleep infinity
+    volumes:
+      # 挂载源码，支持热更新和调试
+      - ..:/workspace:cached
+      - ${USERPROFILE:-~}/.cache/fastembed:/root/.cache/fastembed
+    working_dir: /workspace/backend
+    environment:
+      - APP_ENV=dev
+      - APP_NAME=my-agent-py
+      - APP_LOG_LEVEL=debug
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-my_agent}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-123456}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-123456}
+      - REDIS_DB=3
+      - JWT_SECRET=${JWT_SECRET:-123456}
+      - JWT_EXPIRE_MINUTES=60
+      - JWT_ISSUER=my-agent
+      - AI_EMBEDDING_PROVIDER=${AI_EMBEDDING_PROVIDER:-local}
+      - AI_EMBEDDING_MODEL=${AI_EMBEDDING_MODEL:-BAAI/bge-small-zh-v1.5}
+      - AI_EMBEDDING_DIMENSION=${AI_EMBEDDING_DIMENSION:-512}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - my-agent-network
