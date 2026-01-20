@@ -39,7 +39,7 @@ function SidebarItem({
       className={clsx(
         "flex items-center gap-3 px-4 py-3 rounded-[20px] cursor-pointer transition-all duration-300 group relative",
         isActive
-          ? "bg-gradient-to-br from-purple-500/15 to-pink-500/5 text-white shadow-lg shadow-purple-500/5 border border-purple-500/20"
+          ? "bg-gradient-to-br from-purple-500/15 to-pink-500/5 text-foreground shadow-lg shadow-purple-500/5 border border-purple-500/20"
           : "text-muted hover:text-foreground hover:bg-surface-highlight/10",
         isCollapsed ? "justify-center w-12 h-12 px-0 mx-auto" : "w-full"
       )}
@@ -54,7 +54,7 @@ function SidebarItem({
       {!isCollapsed && (
         <span className={clsx(
           "text-sm truncate flex-1 transition-colors duration-300",
-          isActive ? "font-bold text-white" : "font-medium"
+          isActive ? "font-bold text-foreground" : "font-medium"
         )}>
           {label}
         </span>

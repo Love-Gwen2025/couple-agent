@@ -136,14 +136,14 @@ export function ModelSettingsPage() {
                 </button>
                 <div className="flex-1">
                     <h1 className="text-2xl font-black tracking-tight text-foreground uppercase italic pb-1">AI Models</h1>
-                    <p className="text-xs text-muted font-bold tracking-widest uppercase">Configure LLM Connections & Parameters</p>
+                    <p className="text-xs text-muted tracking-widest uppercase">Configure LLM Connections & Parameters</p>
                 </div>
                 <button
                     onClick={() => {
                         setEditingModel(null);
                         setShowAddModal(true);
                     }}
-                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 active:scale-95 transition-all text-sm uppercase tracking-wide"
+                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 active:scale-95 transition-all text-sm uppercase tracking-wide"
                 >
                     <Plus className="w-4 h-4" />
                     Connect Model
@@ -243,7 +243,7 @@ function ModelRow({
             </td>
             {/* Model Code */}
             <td className="px-6 py-5">
-                <code className="text-[11px] font-mono text-muted bg-surface/40 px-2 py-1 rounded-md border border-border/10">{model.modelCode}</code>
+                <code className="text-[11px] text-muted bg-surface/40 px-2 py-1 rounded-md border border-border/10">{model.modelCode}</code>
             </td>
             {/* Status */}
             <td className="px-6 py-5 text-center">
@@ -420,18 +420,19 @@ function ModelFormModal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
         >
             <motion.div
-                initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                className="w-full max-w-xl glass-premium dual-stroke shadow-premium rounded-[32px] overflow-hidden bg-surface/30"
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-xl rounded-2xl border p-6 shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
+                style={{ borderColor: 'rgb(var(--border) / 0.3)', backgroundColor: 'rgb(var(--background))' }}
             >
                 {/* 标题 */}
-                <div className="flex items-center justify-between px-8 py-6 border-b border-border/10 bg-surface/40">
-                    <h2 className="text-xl font-black italic tracking-tight text-foreground uppercase">{isEdit ? 'Configure Intelligence' : 'establish connection'}</h2>
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold">{isEdit ? '编辑模型' : '新建模型'}</h2>
                     <button
                         type="button"
                         onClick={onClose}
@@ -444,14 +445,15 @@ function ModelFormModal({
                 </div>
 
                 {/* 表单 */}
-                <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-auto custom-scrollbar bg-surface/20">
+                <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-auto custom-scrollbar">
                     {/* 提供商 */}
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">AI Provider</label>
+                        <label className="text-sm font-medium text-muted">AI Provider</label>
                         <select
                             value={provider}
                             onChange={(e) => setProvider(e.target.value)}
-                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground font-bold focus:outline-none focus:border-purple-500/50 appearance-none transition-all"
+                            className="w-full px-4 py-2 rounded-xl border text-foreground focus:outline-none focus:border-primary appearance-none transition-all"
+                            style={{ borderColor: 'rgb(var(--border) / 0.5)', backgroundColor: 'rgb(var(--surface))' }}
                         >
                             {PROVIDERS.map((p) => (
                                 <option key={p.value} value={p.value} className="bg-surface text-foreground">
@@ -463,34 +465,36 @@ function ModelFormModal({
 
                     {/* 模型名称 */}
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">Display Designation *</label>
+                        <label className="text-sm font-medium text-muted">Display Designation *</label>
                         <input
                             type="text"
                             value={modelName}
                             onChange={(e) => setModelName(e.target.value)}
                             placeholder="e.g. My GPT-4"
-                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground font-bold placeholder:text-muted/50 focus:outline-none focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 transition-all"
+                            className="w-full px-4 py-2 rounded-xl border text-foreground placeholder:text-muted/50 focus:outline-none focus:border-primary transition-all"
                             required
+                            style={{ borderColor: 'rgb(var(--border) / 0.5)', backgroundColor: 'rgb(var(--surface))' }}
                         />
                     </div>
 
                     {/* 模型编码 */}
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">Protocol Identifier *</label>
+                        <label className="text-sm font-medium text-muted">Protocol Identifier *</label>
                         <div className="flex gap-3">
                             <input
                                 type="text"
                                 value={modelCode}
                                 onChange={(e) => setModelCode(e.target.value)}
                                 placeholder="e.g. gpt-4o"
-                                className="flex-1 px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground font-mono text-sm placeholder:text-muted/50 focus:outline-none focus:border-purple-500/50 transition-all"
+                                className="flex-1 px-4 py-2 rounded-xl border text-foreground text-sm placeholder:text-muted/50 focus:outline-none focus:border-primary transition-all"
+                                style={{ borderColor: 'rgb(var(--border) / 0.5)', backgroundColor: 'rgb(var(--surface))' }}
                                 required
                             />
                             {MODEL_PRESETS[provider]?.length > 0 && (
                                 <select
                                     value=""
                                     onChange={(e) => e.target.value && setModelCode(e.target.value)}
-                                    className="px-4 py-3.5 rounded-2xl bg-surface-highlight/30 border border-border/10 text-muted hover:text-foreground text-xs font-bold appearance-none transition-all"
+                                    className="px-4 py-3.5 rounded-2xl bg-surface-highlight/60 border border-border/10 text-muted hover:text-foreground text-xs appearance-none transition-all"
                                 >
                                     <option value="" className="bg-surface text-foreground">PRESETS</option>
                                     {MODEL_PRESETS[provider].map((m) => (
@@ -505,7 +509,7 @@ function ModelFormModal({
 
                     {/* API Key */}
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">
+                        <label className="text-sm font-medium text-muted">
                             Access Tokens {isEdit ? '(encrypted)' : '*'}
                         </label>
                         <input
@@ -513,14 +517,14 @@ function ModelFormModal({
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
                             placeholder={isEdit ? '••••••••••••••••' : 'Enter Secret Key'}
-                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-purple-500/50 transition-all placeholder:text-muted/50"
+                            className="w-full px-4 py-2 rounded-xl border text-foreground focus:outline-none focus:border-primary transition-all placeholder:text-muted/50"
                         />
                     </div>
 
                     {/* Base URL */}
                     {(params.baseUrl || params.baseUrlRequired) && (
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">
+                            <label className="text-sm font-medium text-muted">
                                 Gateway URL {params.baseUrlRequired && '*'}
                             </label>
                             <input
@@ -528,7 +532,8 @@ function ModelFormModal({
                                 value={baseUrl}
                                 onChange={(e) => setBaseUrl(e.target.value)}
                                 placeholder="e.g. https://api.openai.com/v1"
-                                className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground font-mono text-xs focus:outline-none focus:border-purple-500/50 transition-all placeholder:text-muted/50"
+                                className="w-full px-4 py-2 rounded-xl border text-foreground text-xs focus:outline-none focus:border-primary transition-all placeholder:text-muted/50"
+                                style={{ borderColor: 'rgb(var(--border) / 0.5)', backgroundColor: 'rgb(var(--surface))' }}
                             />
                         </div>
                     )}
@@ -541,7 +546,7 @@ function ModelFormModal({
                         <div className="grid grid-cols-2 gap-4">
                             {/* Temperature */}
                             <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-muted uppercase tracking-wider ml-1">Temperature</label>
+                                <label className="text-sm font-medium text-muted">Temperature</label>
                                 <input
                                     type="number"
                                     step="0.1"
@@ -549,58 +554,63 @@ function ModelFormModal({
                                     max="2"
                                     value={temperature}
                                     onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                                    className="w-full px-4 py-2.5 rounded-xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-purple-500/50 transition-all"
+                                    className="w-full px-4 py-2.5 rounded-xl border text-foreground focus:outline-none focus:border-primary transition-all"
+                                    style={{ borderColor: 'rgb(var(--border) / 0.5)', backgroundColor: 'rgb(var(--surface))' }}
                                 />
                             </div>
 
                             {params.timeout && (
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-muted uppercase tracking-wider ml-1">Timeout (s)</label>
+                                    <label className="text-sm font-medium text-muted">Timeout (s)</label>
                                     <input
                                         type="number"
                                         value={timeout}
                                         onChange={(e) => setTimeout(parseInt(e.target.value))}
-                                        className="w-full px-4 py-2.5 rounded-xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-purple-500/50 transition-all"
+                                    style={{ borderColor: 'rgb(var(--border) / 0.5)', backgroundColor: 'rgb(var(--surface))' }}
+                                        className="w-full px-4 py-2.5 rounded-xl border text-foreground focus:outline-none focus:border-primary transition-all"
                                     />
                                 </div>
                             )}
 
                             {params.maxTokens && (
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-muted uppercase tracking-wider ml-1">Max Tokens</label>
+                                    <label className="text-sm font-medium text-muted">Max Tokens</label>
                                     <input
                                         type="number"
                                         value={maxTokens || ''}
                                         onChange={(e) => setMaxTokens(e.target.value ? parseInt(e.target.value) : undefined)}
+                                    style={{ borderColor: 'rgb(var(--border) / 0.5)', backgroundColor: 'rgb(var(--surface))' }}
                                         placeholder="Default"
-                                        className="w-full px-4 py-2.5 rounded-xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-purple-500/50 transition-all placeholder:text-muted/50"
+                                        className="w-full px-4 py-2.5 rounded-xl border text-foreground focus:outline-none focus:border-primary transition-all placeholder:text-muted/50"
                                     />
                                 </div>
                             )}
 
                             {params.topP && (
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-muted uppercase tracking-wider ml-1">Top P</label>
+                                    <label className="text-sm font-medium text-muted">Top P</label>
                                     <input
                                         type="number"
                                         step="0.05"
                                         value={topP || ''}
+                                    style={{ borderColor: 'rgb(var(--border) / 0.5)', backgroundColor: 'rgb(var(--surface))' }}
                                         onChange={(e) => setTopP(e.target.value ? parseFloat(e.target.value) : undefined)}
                                         placeholder="Default"
-                                        className="w-full px-4 py-2.5 rounded-xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-purple-500/50 transition-all placeholder:text-muted/50"
+                                        className="w-full px-4 py-2.5 rounded-xl border text-foreground focus:outline-none focus:border-primary transition-all placeholder:text-muted/50"
                                     />
                                 </div>
                             )}
 
                             {params.topK && (
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-muted uppercase tracking-wider ml-1">Top K</label>
+                                    <label className="text-sm font-medium text-muted">Top K</label>
                                     <input
                                         type="number"
+                                    style={{ borderColor: 'rgb(var(--border) / 0.5)', backgroundColor: 'rgb(var(--surface))' }}
                                         value={topK || ''}
                                         onChange={(e) => setTopK(e.target.value ? parseInt(e.target.value) : undefined)}
                                         placeholder="Default"
-                                        className="w-full px-4 py-2.5 rounded-xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-purple-500/50 transition-all placeholder:text-muted/50"
+                                        className="w-full px-4 py-2.5 rounded-xl border text-foreground focus:outline-none focus:border-primary transition-all placeholder:text-muted/50"
                                     />
                                 </div>
                             )}
@@ -608,23 +618,24 @@ function ModelFormModal({
                     </div>
 
                     {/* Actions */}
-                    <div className="flex gap-4 pt-4">
+                    <div className="flex justify-end gap-3 pt-2">
                         <button
                             type="button"
                             onClick={handleTest}
                             disabled={testing || !apiKey}
-                            className="flex-1 px-6 py-3.5 rounded-2xl bg-surface-highlight/20 text-foreground font-bold hover:bg-surface-highlight/30 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                            className="px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+                            style={{ backgroundColor: 'rgb(var(--surface-container-high))' }}
                         >
                             {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube className="w-4 h-4" />}
-                            TEST LINK
+                            测试连接
                         </button>
                         <button
                             type="submit"
                             disabled={loading}
-                            className="flex-[2] px-6 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                            className="px-4 py-2 rounded-lg text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
                         >
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                            SAVE CONFIGURATION
+                            保存
                         </button>
                     </div>
 
@@ -636,7 +647,7 @@ function ModelFormModal({
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
                                 className={clsx(
-                                    "overflow-hidden rounded-xl border border-dashed text-xs font-mono p-4",
+                                    "overflow-hidden rounded-xl border border-dashed text-xs p-4",
                                     testResult.success
                                         ? "bg-green-500/10 border-green-500/30 text-green-500"
                                         : "bg-red-500/10 border-red-500/30 text-red-500"

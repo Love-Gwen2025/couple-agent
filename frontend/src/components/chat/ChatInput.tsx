@@ -70,7 +70,7 @@ export function ChatInput({
         >
           {/* Left Actions */}
           <button
-            className="p-3 rounded-2xl hover:bg-white/[0.05] text-gray-400 hover:text-white transition-all active:scale-95"
+            className="p-3 rounded-2xl hover:bg-white/[0.05] text-gray-400 hover:text-foreground transition-all active:scale-95"
           >
             <Plus className="w-5 h-5" />
           </button>
@@ -82,7 +82,7 @@ export function ChatInput({
               "p-3 rounded-2xl transition-all duration-300 active:scale-95",
               isDeepSearch
                 ? "bg-purple-500/20 text-purple-400 ring-1 ring-purple-500/30"
-                : "hover:bg-white/[0.05] text-gray-400 hover:text-white"
+                : "hover:bg-white/[0.05] text-gray-400 hover:text-foreground"
             )}
             title={isDeepSearch ? "深度搜索模式（已开启）" : "切换到深度搜索模式"}
             aria-label={isDeepSearch ? "关闭深度搜索模式" : "开启深度搜索模式"}
@@ -93,7 +93,7 @@ export function ChatInput({
 
           <textarea
             ref={textareaRef}
-            className="flex-1 bg-transparent text-white resize-none outline-none py-3 px-2 max-h-[200px] placeholder:text-gray-600 text-[16px] min-h-[48px] leading-relaxed font-medium"
+            className="flex-1 bg-transparent text-foreground resize-none outline-none py-3 px-2 max-h-[200px] placeholder:text-muted text-[16px] min-h-[48px] leading-relaxed font-medium"
             placeholder={isDeepSearch ? "深度研究：输入复杂问题..." : "Ask anything..."}
             rows={1}
             value={input}
