@@ -55,5 +55,9 @@ frontend/.env.local
 # 但保留 example 模板
 !.env.example
 !.env.prod.example
-# Claude 配置
+# AI 配置文件
 .claude/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+
