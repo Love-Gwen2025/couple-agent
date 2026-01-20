@@ -1,16 +1,24 @@
 /**
  * 模型选择器组件
+ *
+ * 功能：
+ * 1. 显示可用模型下拉列表
+ * 2. 支持模型切换（用 id 唯一标识）
  */
 import { useEffect, useState } from 'react';
 import { ChevronDown, Bot, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAppStore } from '../../store';
+import { useAuthStore, useModelStore } from '../../store';
 import { getModels } from '../../api';
 import clsx from 'clsx';
 
 export function ModelSelector() {
-  const { models, currentModelCode, setModels, setCurrentModelCode, token } =
-    useAppStore();
+  // 认证状态
+  const { token } = useAuthStore();
+
+  // 模型状态（使用 currentModelId 作为唯一标识）
+  const { models, currentModelId, setModels, setCurrentModelCode, setCurrentModelId } =
+    useModelStore();
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -21,16 +29,20 @@ export function ModelSelector() {
     try {
       const data = await getModels();
       setModels(data);
-      if (!currentModelCode && data.length > 0) {
+      // 如果没有选中的模型，设置默认模型
+      if (currentModelId === null && data.length > 0) {
         const defaultModel = data.find((m) => m.isDefault) || data[0];
         setCurrentModelCode(defaultModel.modelCode);
+        // 系统默认模型 id=0 存为 '0'，用户模型存实际 id
+        setCurrentModelId(String(defaultModel.id));
       }
     } catch (error) {
       console.error('加载模型列表失败:', error);
     }
   }
 
-  const currentModel = models.find((m) => m.modelCode === currentModelCode);
+  // 通过 id 匹配当前选中的模型
+  const currentModel = models.find((m) => String(m.id) === currentModelId);
 
   if (models.length === 0) return null;
 
@@ -67,26 +79,32 @@ export function ModelSelector() {
               <div className="px-2 py-1.5 text-xs font-semibold text-muted/50 uppercase tracking-wider">
                 Available Models
               </div>
-              {models.map((model) => (
-                <button
-                  key={model.id}
-                  className={clsx(
-                    'w-full px-3 py-2.5 text-left text-sm rounded-lg transition-all flex items-center justify-between group',
-                    model.modelCode === currentModelCode
-                      ? 'bg-primary/10 text-primary'
-                      : 'hover:bg-surface-highlight text-muted hover:text-foreground'
-                  )}
-                  onClick={() => {
-                    setCurrentModelCode(model.modelCode);
-                    setIsOpen(false);
-                  }}
-                >
-                  <span className="font-medium">{model.modelName}</span>
-                  {model.modelCode === currentModelCode && (
-                    <Check className="w-4 h-4 text-primary" />
-                  )}
-                </button>
-              ))}
+              {models.map((model) => {
+                // 用 id 字符串做匹配
+                const isSelected = String(model.id) === currentModelId;
+                return (
+                  <button
+                    key={model.id}
+                    className={clsx(
+                      'w-full px-3 py-2.5 text-left text-sm rounded-lg transition-all flex items-center justify-between group',
+                      isSelected
+                        ? 'bg-primary/10 text-primary'
+                        : 'hover:bg-surface-highlight text-muted hover:text-foreground'
+                    )}
+                    onClick={() => {
+                      setCurrentModelCode(model.modelCode);
+                      // 统一用字符串存储（系统模型 '0'，用户模型实际 id）
+                      setCurrentModelId(String(model.id));
+                      setIsOpen(false);
+                    }}
+                  >
+                    <span className="font-medium">{model.modelName}</span>
+                    {isSelected && (
+                      <Check className="w-4 h-4 text-primary" />
+                    )}
+                  </button>
+                );
+              })}
             </motion.div>
           </>
         )}

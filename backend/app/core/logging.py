@@ -32,22 +32,26 @@ def setup_logging(
             serialize=True,  # 自动输出 JSON 格式
         )
     else:
-        # 开发环境彩色输出
+        # 开发环境彩色输出（包含请求上下文）
         logger.add(
             sys.stdout,
             level=level.upper(),
             format=(
                 "<dim>{time:YYYY-MM-DD HH:mm:ss}</dim> | "
                 "<level>{level: <8}</level> | "
+                "<magenta>[{extra[request_id]:<8}]</magenta> "
                 "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
                 "<level>{message}</level>"
             ),
             colorize=True,
+            # 为没有 request_id 的日志提供默认值
+            filter=lambda record: record["extra"].setdefault("request_id", "--------") or True,
         )
 
     # 过滤第三方库的日志（通过添加 filter）
     # Loguru 会自动继承 Python 标准库的日志配置
     import logging
+
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)

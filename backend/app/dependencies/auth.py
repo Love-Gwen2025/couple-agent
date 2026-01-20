@@ -10,7 +10,7 @@ from app.utils.session_store import SessionStore
 
 class CurrentUser:
     """
-    1. 描述当前登录用户的会话视图。
+    描述当前登录用户的会话视图
     """
 
     def __init__(self, payload: dict):
@@ -24,30 +24,42 @@ class CurrentUser:
 
 
 async def get_current_user(
-    token: Annotated[str | None, Header()] = None,
+    token_header: Annotated[str | None, Header(alias="token")] = None,
     authorization: Annotated[str | None, Header()] = None,
     redis=Depends(get_redis),
 ):
     """
-    1. 解析 `token` 或 `Authorization` 头，校验 JWT 并从 Redis 获取会话，未通过则返回 401。
+    解析认证信息，支持两种方式（优先级从高到低）：
+    1. Authorization Header (Bearer Token)
+    2. token Header
+
+    校验 JWT 并从 Redis 获取会话，未通过则返回 401。
     """
     raw_token: str | None = None
-    if token:
-        raw_token = token.strip()
-    elif authorization:
+
+    # 优先级1: Authorization Header
+    if authorization:
         raw = authorization.strip()
         raw_token = raw.split(" ", 1)[1].strip() if raw.lower().startswith("bearer ") else raw
+    # 优先级2: token Header
+    elif token_header:
+        raw_token = token_header.strip()
+
     if not raw_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")
-    # 1. 解析 JWT
+
+    # 解析 JWT
     settings = get_settings()
     claims = decode_token(raw_token, settings)
     if claims is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="token 无效或已过期")
+
     user_id = claims.get("userId") or claims.get("sub")
-    # 2. 校验 Redis 会话
+
+    # 校验 Redis 会话
     store = SessionStore(redis, settings)
     session = await store.load_session(str(user_id), raw_token)
     if session is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="会话不存在或已过期")
+
     return CurrentUser(session)

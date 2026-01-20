@@ -23,7 +23,6 @@ def build_database_url(cfg: Settings) -> str:
 def create_engine(cfg: Settings) -> AsyncEngine:
     """
     1. 创建异步引擎并限制池大小，适配 1C2G 部署环境。
-    2. 通过 server_settings 设置默认 schema。
     """
     return create_async_engine(
         build_database_url(cfg),
@@ -31,7 +30,6 @@ def create_engine(cfg: Settings) -> AsyncEngine:
         max_overflow=cfg.db_max_overflow,
         echo=False,
         pool_pre_ping=True,
-        connect_args={"server_settings": {"search_path": cfg.db_name}},
     )
 
 

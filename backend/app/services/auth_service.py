@@ -66,7 +66,8 @@ class AuthService:
             "loginTime": int(datetime.now(UTC).timestamp() * 1000),
         }
         ttl_seconds = self.settings.jwt_expire_minutes * 60
-        await self.store.save_session(session_payload, ttl_seconds)
+        # 4. 使用用户自定义的最大登录数
+        await self.store.save_session(session_payload, ttl_seconds, user.max_login_num)
         return token
 
     async def logout(self, user_id: int, token: str) -> None:

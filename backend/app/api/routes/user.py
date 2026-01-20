@@ -86,7 +86,9 @@ async def login_user(
     redis=Depends(get_redis),
 ):
     """
-    1. 用户登录：兼容明文/哈希，生成 JWT 并写入 Redis 会话。
+    用户登录：验证凭据，生成 JWT 并写入 Redis 会话。
+
+    Token 通过响应体返回，前端存储到 localStorage 并在请求时通过 Header 发送。
     """
     settings = get_settings()
     store = SessionStore(redis, settings)
@@ -101,16 +103,14 @@ async def login_user(
 
 @router.post("/logout", response_model=ApiResult[None])
 async def logout_user(
-    response: Response,
     current: CurrentUser = Depends(get_current_user),
     redis=Depends(get_redis),
 ):
     """
-    1. 注销：删除 Redis 会话索引。
+    注销：删除 Redis 会话
     """
     settings = get_settings()
     store = SessionStore(redis, settings)
-    # 使用 CurrentUser 中存储的 token（从请求头获取）
     await store.remove_session(str(current.id), current.token)
     return ApiResult.ok()
 

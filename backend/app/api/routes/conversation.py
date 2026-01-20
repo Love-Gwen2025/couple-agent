@@ -1,6 +1,5 @@
-import logging
-
 from fastapi import APIRouter, Depends
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.converter.converter import (
@@ -9,7 +8,7 @@ from app.converter.converter import (
 )
 from app.core.db import get_db_session
 from app.dependencies.auth import CurrentUser, get_current_user
-from app.schema.base import ApiResult
+from app.schema.base import ApiResult, PageParams, PageResponse
 from app.schema.conversation import (
     ConversationParam,
     ConversationVo,
@@ -18,9 +17,6 @@ from app.schema.conversation import (
     MessageVo,
 )
 from app.services.conversation_service import ConversationService
-
-# 模块级别的 logger，避免每次调用都创建
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversation", tags=["会话"])
 
@@ -37,25 +33,35 @@ async def create_assistant_conversation(
     service = ConversationService(db)
     conv_id = await service.create_conversation(current.id, payload.title, payload.modelCode)
     conversation = await service.get_conversation(conv_id, current.id)
-    return ApiResult.ok(ConversationConverter.from_dict(conversation))
+    return ApiResult.ok(ConversationConverter.to_vo(conversation))
 
 
-@router.get("/list", response_model=ApiResult[dict])
+@router.get("/list", response_model=ApiResult[PageResponse])
 async def list_conversations(
-    limit: int = 20,
-    offset: int = 0,
+    page: int = 1,
+    size: int = 20,
     db: AsyncSession = Depends(get_db_session),
     current: CurrentUser = Depends(get_current_user),
-) -> ApiResult[dict]:
+) -> ApiResult[PageResponse]:
     """
     查询当前用户会话列表，支持分页。
+
+    Args:
+        page: 页码，从 1 开始
+        size: 每页大小
     """
+    # 构造分页参数
+    params = PageParams(page=page, size=size)
     service = ConversationService(db)
-    items, has_more = await service.list_conversations(current.id, limit, offset)
-    return ApiResult.ok({
-        "items": [ConversationConverter.from_dict(item) for item in items],
-        "hasMore": has_more,
-    })
+    items, total = await service.list_conversations_page(current.id, params)
+    return ApiResult.ok(
+        PageResponse.of(
+            records=[ConversationConverter.to_vo(item) for item in items],
+            total=total,
+            page=params.page,
+            size=params.size,
+        )
+    )
 
 
 @router.get("/history", response_model=ApiResult[HistoryResponse])
@@ -70,12 +76,12 @@ async def history(
     conv_service = ConversationService(db)
     # ForbiddenError 由全局异常处理器捕获
     await conv_service.ensure_owner(int(conversationId), current.id)
-    result = await conv_service.history(current.id, int(conversationId))
-    logger.info(f"[history] messages count: {len(result['messages'])}")
+    messages, current_message_id = await conv_service.history(current.id, int(conversationId))
+    logger.info(f"[history] messages count: {len(messages)}")
     return ApiResult.ok(
         HistoryResponse(
-            messages=[MessageConverter.from_dict(item) for item in result["messages"]],
-            currentMessageId=result["currentMessageId"],
+            messages=[MessageConverter.to_vo(msg) for msg in messages],
+            currentMessageId=str(current_message_id) if current_message_id else None,
         )
     )
 
@@ -90,8 +96,8 @@ async def get_conversation_detail(
     获取会话详情，校验归属。
     """
     service = ConversationService(db)
-    vo = await service.get_conversation(int(conversation_id), current.id)
-    return ApiResult.ok(ConversationConverter.from_dict(vo))
+    conversation = await service.get_conversation(int(conversation_id), current.id)
+    return ApiResult.ok(ConversationConverter.to_vo(conversation))
 
 
 @router.post("/send", response_model=ApiResult[MessageVo])

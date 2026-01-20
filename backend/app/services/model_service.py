@@ -1,8 +1,7 @@
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from loguru import logger
 
@@ -15,106 +14,154 @@ class ModelService:
     模型服务层 - 封装 LLM 调用逻辑
 
     职责：
-    1. 管理 LLM 客户端 (支持多提供商: DeepSeek / OpenAI / 中转站)
+    1. 管理 LLM 客户端 (系统默认 DeepSeek，其他通过用户自定义模型支持)
     2. 提供同步/流式对话接口
-    3. 支持工具绑定 (Function Calling / Tool Use)
-    4. 为 LangGraph 提供底层 model 访问
-
-    提供商选择:
-    - deepseek: 使用 DeepSeek API (默认)
-    - openai: 使用 OpenAI API
-    - custom: 使用中转站 Responses API
+    3. 封装不同模型的输出格式差异
+    4. 支持从用户自定义模型创建实例
     """
 
-    def __init__(self, settings: Settings, tools: Sequence[BaseTool] | None = None):
+    def __init__(self, settings: Settings):
         """
         初始化模型服务
 
-        根据 settings.ai_provider 配置选择不同的模型提供商:
-        - deepseek: 使用 ChatOpenAI 连接 DeepSeek API
-        - openai: 使用 ChatOpenAI 连接 OpenAI API
-        - custom: 使用 CustomChatModel 连接中转站 Responses API
+        系统默认使用 DeepSeek，其他提供商通过用户自定义模型支持
         """
         self.model = self._create_model(settings)
-        logger.info(f"ModelService initialized with provider: {settings.ai_provider}")
-
-        # 如果传入了工具列表，创建绑定工具的模型实例
-        # bind_tools 会让 LLM 知道可以调用哪些工具，并返回结构化的 tool_calls
-        self.tools = tools or []
-        if self.tools:
-            self.model_with_tools = self.model.bind_tools(self.tools)
-        else:
-            self.model_with_tools = None
+        logger.info("ModelService initialized with DeepSeek")
 
     def _create_model(self, settings: Settings) -> BaseChatModel:
         """
-        根据配置创建对应的模型实例
+        创建 DeepSeek 模型实例
+
+        系统默认使用 DeepSeek，其他提供商通过用户自定义模型支持
 
         Returns:
             BaseChatModel: LangChain 兼容的 ChatModel 实例
         """
-        provider = settings.ai_provider.lower()
+        logger.info(f"Creating ChatOpenAI (DeepSeek): model={settings.ai_deepseek_model_name}")
+        return ChatOpenAI(
+            api_key=settings.ai_deepseek_api_key or "",
+            base_url=settings.ai_deepseek_base_url,
+            model=settings.ai_deepseek_model_name,
+            temperature=settings.ai_deepseek_temperature,
+            timeout=settings.ai_deepseek_timeout,
+        )
 
-        if provider == "custom" and settings.ai_custom_api_key:
-            # 中转站 API (使用 Responses API 适配器)
-            from app.services.custom_model_adapter import CustomChatModel
+    @classmethod
+    def from_user_model(
+        cls,
+        user_model,
+    ) -> "ModelService":
+        """
+        从用户自定义模型配置创建 ModelService 实例
 
-            logger.info(
-                f"Creating CustomChatModel: base_url={settings.ai_custom_base_url}, "
-                f"model={settings.ai_custom_model_name}"
+        Args:
+            user_model: UserModel 实体（api_key 应已解密）
+
+        Returns:
+            ModelService 实例
+        """
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        provider = user_model.provider.lower()
+        instance = cls.__new__(cls)
+
+        # 提取高级参数（转换为 float/int，None 值保持不变）
+        top_p = float(user_model.top_p) if user_model.top_p is not None else None
+        max_tokens = user_model.max_tokens
+        top_k = user_model.top_k
+
+        # 根据提供商创建模型
+        if provider == "gemini":
+            logger.info(f"Creating ChatGoogleGenerativeAI from user_model: {user_model.model_code}")
+            # Gemini 支持 top_p 和 top_k，不支持 max_tokens
+            kwargs = {
+                "model": user_model.model_code,
+                "google_api_key": user_model.api_key,
+                "temperature": float(user_model.temperature),
+            }
+            if top_p is not None:
+                kwargs["top_p"] = top_p
+            if top_k is not None:
+                kwargs["top_k"] = top_k
+            instance.model = ChatGoogleGenerativeAI(**kwargs)
+
+        elif provider == "openai":
+            logger.info(f"Creating ChatOpenAI (OpenAI) from user_model: {user_model.model_code}")
+            # OpenAI 支持 top_p 和 max_tokens
+            kwargs = {
+                "api_key": user_model.api_key,
+                "base_url": user_model.base_url or "https://api.openai.com/v1",
+                "model": user_model.model_code,
+                "temperature": float(user_model.temperature),
+                "timeout": user_model.timeout,
+            }
+            if top_p is not None:
+                kwargs["top_p"] = top_p
+            if max_tokens is not None:
+                kwargs["max_tokens"] = max_tokens
+            instance.model = ChatOpenAI(**kwargs)
+
+        elif provider == "deepseek":
+            logger.info(f"Creating ChatOpenAI (DeepSeek) from user_model: {user_model.model_code}")
+            # DeepSeek 支持 top_p 和 max_tokens
+            kwargs = {
+                "api_key": user_model.api_key,
+                "base_url": user_model.base_url or "https://api.deepseek.com",
+                "model": user_model.model_code,
+                "temperature": float(user_model.temperature),
+                "timeout": user_model.timeout,
+            }
+            if top_p is not None:
+                kwargs["top_p"] = top_p
+            if max_tokens is not None:
+                kwargs["max_tokens"] = max_tokens
+            instance.model = ChatOpenAI(**kwargs)
+
+        elif provider == "custom":
+            if not user_model.base_url:
+                raise ValueError("custom 提供商必须配置 base_url")
+            logger.info(f"Creating ChatOpenAI (Custom) from user_model: {user_model.model_code}")
+            # Custom 只支持基础参数
+            instance.model = ChatOpenAI(
+                api_key=user_model.api_key,
+                base_url=user_model.base_url,
+                model=user_model.model_code,
+                temperature=float(user_model.temperature),
+                timeout=user_model.timeout,
             )
-            return CustomChatModel(
-                api_key=settings.ai_custom_api_key,
-                base_url=settings.ai_custom_base_url or "",
-                model=settings.ai_custom_model_name,
-                temperature=settings.ai_custom_temperature,
-            )
-
-        elif provider == "openai" and settings.ai_openai_api_key:
-            # OpenAI API
-            logger.info(f"Creating ChatOpenAI (OpenAI): model={settings.ai_openai_deployment_name}")
-            return ChatOpenAI(
-                api_key=settings.ai_openai_api_key,
-                base_url=settings.ai_openai_base_url,
-                model=settings.ai_openai_deployment_name or "gpt-4",
-                temperature=settings.ai_openai_temperature,
-                timeout=settings.ai_openai_timeout,
-            )
-
-        elif provider == "gemini" and settings.ai_gemini_api_key:
-            # Google Gemini API
-            from langchain_google_genai import ChatGoogleGenerativeAI
-
-            logger.info(f"Creating ChatGoogleGenerativeAI: model={settings.ai_gemini_model_name}")
-            return ChatGoogleGenerativeAI(
-                model=settings.ai_gemini_model_name,
-                google_api_key=settings.ai_gemini_api_key,
-                temperature=settings.ai_gemini_temperature,
-            )
-
         else:
-            # 默认: DeepSeek API
-            logger.info(f"Creating ChatOpenAI (DeepSeek): model={settings.ai_deepseek_model_name}")
-            return ChatOpenAI(
-                api_key=settings.ai_deepseek_api_key or "",
-                base_url=settings.ai_deepseek_base_url,
-                model=settings.ai_deepseek_model_name,
-                temperature=settings.ai_deepseek_temperature,
-                timeout=settings.ai_deepseek_timeout,
-            )
+            raise ValueError(f"不支持的提供商: {provider}")
 
-    def get_model(self, with_tools: bool = False) -> ChatOpenAI:
+        return instance
+
+    @classmethod
+    def create_default_deepseek(cls, api_key: str) -> "ModelService":
+        """
+        创建默认的 DeepSeek 模型服务
+
+        系统默认模型，使用 DeepSeek-Chat (V3)，支持工具调用
+        """
+        instance = cls.__new__(cls)
+
+        logger.info("Creating default DeepSeek Chat ModelService")
+        instance.model = ChatOpenAI(
+            api_key=api_key,
+            base_url="https://api.deepseek.com",
+            model="deepseek-chat",
+            temperature=0.7,
+            timeout=60,
+        )
+
+        return instance
+
+    def get_model(self) -> BaseChatModel:
         """
         获取底层模型实例，供 LangGraph 或其他高级用途使用。
 
-        Args:
-            with_tools: 是否返回绑定了工具的模型
-
         Returns:
-            ChatOpenAI 实例
+            BaseChatModel 实例
         """
-        if with_tools and self.model_with_tools:
-            return self.model_with_tools
         return self.model
 
     async def chat(self, content: str) -> str:

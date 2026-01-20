@@ -8,6 +8,7 @@ Embedding 服务 - 支持本地模型和远程 API
 
 from typing import Any
 
+from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,10 +46,10 @@ class EmbeddingService:
             from fastembed import TextEmbedding
 
             model_name = self.settings.ai_embedding_model
-            print(f"📥 Loading local embedding model (fastembed): {model_name}")
+            logger.info(f"Loading local embedding model (fastembed): {model_name}")
             # fastembed 会自动下载并缓存模型到 ~/.cache/fastembed
             self._model = TextEmbedding(model_name=model_name)
-            print("✅ Model loaded successfully")
+            logger.info("Embedding model loaded successfully")
 
         return self._model
 
@@ -59,8 +60,8 @@ class EmbeddingService:
         if self._embeddings is None:
             from langchain_openai import OpenAIEmbeddings
 
-            api_key = self.settings.ai_embedding_api_key or self.settings.ai_openai_api_key
-            base_url = self.settings.ai_embedding_base_url or self.settings.ai_openai_base_url
+            api_key = self.settings.ai_embedding_api_key
+            base_url = self.settings.ai_embedding_base_url
 
             self._embeddings = OpenAIEmbeddings(
                 model=self.settings.ai_embedding_model,
@@ -151,6 +152,7 @@ class EmbeddingService:
         # 构建查询 - 使用余弦相似度
         # 使用 JSON 格式传递向量，避免 SQL 注入
         import json
+
         query_vec_json = json.dumps(query_vector)
 
         if conversation_id:
@@ -193,3 +195,200 @@ class EmbeddingService:
             for row in rows
             if float(row.similarity) >= similarity_threshold
         ]
+
+    # ========== 知识库检索方法 ==========
+
+    async def search_knowledge_base(
+        self,
+        db: AsyncSession,
+        query: str,
+        knowledge_base_ids: list[int],
+        top_k: int = 5,
+        similarity_threshold: float = 0.5,
+    ) -> list[dict[str, Any]]:
+        """
+        在知识库中进行向量检索
+
+        Args:
+            db: 数据库会话
+            query: 查询文本
+            knowledge_base_ids: 知识库 ID 列表
+            top_k: 返回最相似的 K 条结果
+            similarity_threshold: 相似度阈值
+
+        Returns:
+            [{content, similarity, document_id, chunk_index, metadata}, ...]
+        """
+        import json
+
+        # 生成查询向量
+        query_vector = await self.embed_text(query)
+        query_vec_json = json.dumps(query_vector)
+
+        # 构建 SQL 查询
+        sql = text("""
+            SELECT
+                c.content,
+                c.document_id,
+                c.chunk_index,
+                c.metadata,
+                d.file_name,
+                1 - (c.embedding <=> CAST(:query_vec AS vector)) as similarity
+            FROM t_document_chunk c
+            JOIN t_document d ON c.document_id = d.id
+            WHERE c.knowledge_base_id = ANY(:kb_ids)
+            ORDER BY c.embedding <=> CAST(:query_vec AS vector)
+            LIMIT :limit
+        """)
+
+        result = await db.execute(
+            sql,
+            {
+                "query_vec": query_vec_json,
+                "kb_ids": knowledge_base_ids,
+                "limit": top_k,
+            },
+        )
+        rows = result.fetchall()
+
+        # 过滤并格式化结果
+        return [
+            {
+                "content": row.content,
+                "similarity": float(row.similarity),
+                "document_id": str(row.document_id),
+                "chunk_index": row.chunk_index,
+                "file_name": row.file_name,
+                "metadata": row.metadata,
+            }
+            for row in rows
+            if float(row.similarity) >= similarity_threshold
+        ]
+
+    async def hybrid_search_knowledge_base(
+        self,
+        db: AsyncSession,
+        query: str,
+        knowledge_base_ids: list[int],
+        top_k: int = 5,
+        similarity_threshold: float = 0.5,
+        mode: str = "union",  # union（并集）或 intersection（交集）
+    ) -> list[dict[str, Any]]:
+        """
+        混合检索：向量检索 + BM25 关键词检索
+
+        Args:
+            db: 数据库会话
+            query: 查询文本
+            knowledge_base_ids: 知识库 ID 列表
+            top_k: 返回结果数量
+            similarity_threshold: 相似度阈值
+            mode: 合并模式 (union=并集, intersection=交集)
+
+        Returns:
+            融合排序后的结果列表
+        """
+        import jieba
+        from rank_bm25 import BM25Okapi
+
+        # 1. 向量检索
+        vector_results = await self.search_knowledge_base(
+            db=db,
+            query=query,
+            knowledge_base_ids=knowledge_base_ids,
+            top_k=top_k * 2,  # 多取一些用于融合
+            similarity_threshold=similarity_threshold,
+        )
+
+        # 2. 获取所有文档分块用于 BM25
+        sql = text("""
+            SELECT c.id, c.content, c.document_id, c.chunk_index, c.metadata, d.file_name
+            FROM t_document_chunk c
+            JOIN t_document d ON c.document_id = d.id
+            WHERE c.knowledge_base_id = ANY(:kb_ids)
+        """)
+        result = await db.execute(sql, {"kb_ids": knowledge_base_ids})
+        all_chunks = result.fetchall()
+
+        if not all_chunks:
+            return vector_results[:top_k]
+
+        # 3. BM25 检索
+        # 分词
+        tokenized_corpus = [list(jieba.cut(chunk.content)) for chunk in all_chunks]
+        tokenized_query = list(jieba.cut(query))
+
+        bm25 = BM25Okapi(tokenized_corpus)
+        bm25_scores = bm25.get_scores(tokenized_query)
+
+        # 获取 BM25 top-k
+        bm25_top_indices = sorted(
+            range(len(bm25_scores)),
+            key=lambda i: bm25_scores[i],
+            reverse=True,
+        )[: top_k * 2]
+
+        bm25_results = []
+        max_bm25_score = max(bm25_scores) if bm25_scores.any() else 1
+        for idx in bm25_top_indices:
+            chunk = all_chunks[idx]
+            # 归一化 BM25 分数到 0-1
+            normalized_score = bm25_scores[idx] / max_bm25_score if max_bm25_score > 0 else 0
+            bm25_results.append(
+                {
+                    "content": chunk.content,
+                    "similarity": normalized_score,
+                    "document_id": str(chunk.document_id),
+                    "chunk_index": chunk.chunk_index,
+                    "file_name": chunk.file_name,
+                    "metadata": chunk.metadata,
+                    "source": "bm25",
+                }
+            )
+
+        # 4. 融合结果
+        # 使用 Reciprocal Rank Fusion (RRF) 算法
+        k = 60  # RRF 常数
+
+        # 计算 RRF 分数
+        rrf_scores: dict[str, float] = {}
+        content_map: dict[str, dict] = {}
+
+        # 向量检索结果
+        for rank, item in enumerate(vector_results):
+            key = f"{item['document_id']}_{item['chunk_index']}"
+            rrf_scores[key] = rrf_scores.get(key, 0) + 1 / (k + rank + 1)
+            item["source"] = "vector"
+            content_map[key] = item
+
+        # BM25 结果
+        for rank, item in enumerate(bm25_results):
+            key = f"{item['document_id']}_{item['chunk_index']}"
+            rrf_scores[key] = rrf_scores.get(key, 0) + 1 / (k + rank + 1)
+            if key not in content_map:
+                content_map[key] = item
+
+        # 根据模式过滤
+        if mode == "intersection":
+            # 交集：只保留两种方法都检索到的结果
+            vector_keys = {f"{r['document_id']}_{r['chunk_index']}" for r in vector_results}
+            bm25_keys = {f"{r['document_id']}_{r['chunk_index']}" for r in bm25_results}
+            valid_keys = vector_keys & bm25_keys
+            rrf_scores = {k: v for k, v in rrf_scores.items() if k in valid_keys}
+
+        # 按 RRF 分数排序
+        sorted_keys = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+
+        # 构建最终结果
+        final_results = []
+        for key in sorted_keys[:top_k]:
+            item = content_map[key]
+            item["rrf_score"] = rrf_scores[key]
+            final_results.append(item)
+
+        logger.info(
+            f"Hybrid search: vector={len(vector_results)}, bm25={len(bm25_results)}, "
+            f"final={len(final_results)} (mode={mode})"
+        )
+
+        return final_results

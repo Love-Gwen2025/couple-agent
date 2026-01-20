@@ -35,38 +35,20 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-123456}
-      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_DB=${REDIS_DB:-3}
 
       # ==================== JWT 认证 ====================
       - JWT_SECRET=${JWT_SECRET:-123456}
       - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES:-60}
       - JWT_ISSUER=${JWT_ISSUER:-my-agent}
 
-      # ==================== AI 提供商选择 ====================
-      - AI_PROVIDER=${AI_PROVIDER:-deepseek}
-
-      # ==================== DeepSeek 配置 ====================
+      # ==================== DeepSeek 配置（系统默认模型） ====================
+      # 其他提供商通过用户自定义模型功能配置
       - AI_DEEPSEEK_API_KEY=${AI_DEEPSEEK_API_KEY}
       - AI_DEEPSEEK_BASE_URL=${AI_DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - AI_DEEPSEEK_MODEL_NAME=${AI_DEEPSEEK_MODEL_NAME:-deepseek-chat}
       - AI_DEEPSEEK_TEMPERATURE=${AI_DEEPSEEK_TEMPERATURE:-0.7}
       - AI_DEEPSEEK_TIMEOUT=${AI_DEEPSEEK_TIMEOUT:-30}
-
-      # ==================== OpenAI 配置 ====================
-      - AI_OPENAI_API_KEY=${AI_OPENAI_API_KEY:-}
-      - AI_OPENAI_BASE_URL=${AI_OPENAI_BASE_URL:-https://api.openai.com/v1}
-
-      # ==================== Gemini 配置 ====================
-      - AI_GEMINI_API_KEY=${AI_GEMINI_API_KEY:-}
-      - AI_GEMINI_MODEL_NAME=${AI_GEMINI_MODEL_NAME:-gemini-2.0-flash}
-      - AI_GEMINI_TEMPERATURE=${AI_GEMINI_TEMPERATURE:-0.7}
-
-      # ==================== 自定义中转站 ====================
-      - AI_CUSTOM_API_KEY=${AI_CUSTOM_API_KEY:-}
-      - AI_CUSTOM_BASE_URL=${AI_CUSTOM_BASE_URL:-}
-      - AI_CUSTOM_MODEL_NAME=${AI_CUSTOM_MODEL_NAME:-gpt-5.1-codex-max}
-      - AI_CUSTOM_TEMPERATURE=${AI_CUSTOM_TEMPERATURE:-0.7}
-      - AI_CUSTOM_TIMEOUT=${AI_CUSTOM_TIMEOUT:-60}
 
       # ==================== Embedding 向量化 ====================
       - AI_EMBEDDING_PROVIDER=${AI_EMBEDDING_PROVIDER:-local}
@@ -80,13 +62,11 @@ services:
       - CONVERSATION_CACHE_MAX_MESSAGES=${CONVERSATION_CACHE_MAX_MESSAGES:-20}
       - MAX_HISTORY_MESSAGES=${MAX_HISTORY_MESSAGES:-20}
       - MAX_HISTORY_TOKENS=${MAX_HISTORY_TOKENS:-4000}
-      - RAG_ENABLED=${RAG_ENABLED:-true}
       - RAG_TOP_K=${RAG_TOP_K:-5}
       - RAG_SIMILARITY_THRESHOLD=${RAG_SIMILARITY_THRESHOLD:-0.6}
 
       # ==================== Tavily 搜索 ====================
       - TAVILY_API_KEY=${TAVILY_API_KEY}
-      - TAVILY_ENABLED=${TAVILY_ENABLED:-true}
 
       # ==================== OSS 对象存储 ====================
       - OSS_ACCESS_KEY_ID=${OSS_ACCESS_KEY_ID}
@@ -97,9 +77,15 @@ services:
       - OSS_CUSTOM_DOMAIN=${OSS_CUSTOM_DOMAIN:-}
       - OSS_OBJECT_PREFIX=${OSS_OBJECT_PREFIX:-}
 
-      # ==================== 功能开关 ====================
-      - ENABLE_SSE_STREAMING=${ENABLE_SSE_STREAMING:-true}
-      - ENABLE_WEBSOCKET=${ENABLE_WEBSOCKET:-true}
+      # ==================== Langfuse 可观测性 ====================
+      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-true}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
+    volumes:
+      # ==================== 挂载本地嵌入模型缓存 ====================
+      # 与 celery-worker 共享同一份模型缓存
+      - ${USERPROFILE:-.}/.cache/fastembed:/root/.cache/fastembed
     depends_on:
       postgres:
         condition: service_healthy
@@ -113,6 +99,65 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # ---------- Celery Worker ----------
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: my-agent-celery
+    restart: unless-stopped
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4 -I app.tasks.document_tasks,app.tasks.embedding_tasks
+    environment:
+      # ==================== 应用基础 ====================
+      - APP_ENV=${APP_ENV:-prod}
+      - APP_NAME=${APP_NAME:-my-agent-py}
+      - APP_LOG_LEVEL=${APP_LOG_LEVEL:-info}
+
+      # ==================== PostgreSQL 数据库 ====================
+      - DB_HOST=postgres
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-my_agent}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-123456}
+
+      # ==================== Redis 缓存 ====================
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-123456}
+      - REDIS_DB=${REDIS_DB:-3}
+
+      # ==================== Celery 消息队列 ====================
+      - CELERY_BROKER_DB=${CELERY_BROKER_DB:-1}
+      - CELERY_RESULT_DB=${CELERY_RESULT_DB:-2}
+
+      # ==================== Embedding 向量化 ====================
+      - AI_EMBEDDING_PROVIDER=${AI_EMBEDDING_PROVIDER:-local}
+      - AI_EMBEDDING_MODEL=${AI_EMBEDDING_MODEL:-BAAI/bge-small-zh-v1.5}
+      - AI_EMBEDDING_DIMENSION=${AI_EMBEDDING_DIMENSION:-512}
+
+      # ==================== OSS 对象存储 ====================
+      - OSS_ACCESS_KEY_ID=${OSS_ACCESS_KEY_ID}
+      - OSS_ACCESS_KEY_SECRET=${OSS_ACCESS_KEY_SECRET}
+      - OSS_BUCKET=${OSS_BUCKET}
+      - OSS_REGION=${OSS_REGION:-us-west-1}
+      - OSS_ENDPOINT=${OSS_ENDPOINT}
+      - OSS_CUSTOM_DOMAIN=${OSS_CUSTOM_DOMAIN:-}
+      - OSS_OBJECT_PREFIX=${OSS_OBJECT_PREFIX:-}
+    volumes:
+      # ==================== 挂载本地嵌入模型缓存 ====================
+      # Windows 用户需先在本地下载模型：
+      #   pip install fastembed
+      #   python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-zh-v1.5')"
+      # 模型会下载到 ~/.cache/fastembed 目录
+      - ${USERPROFILE:-.}/.cache/fastembed:/root/.cache/fastembed
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - my-agent-network
 
   # ---------- 前端服务 ----------
   frontend:
@@ -137,6 +182,8 @@ services:
       - POSTGRES_USER=${DB_USER:-postgres}
       - POSTGRES_PASSWORD=${DB_PASSWORD:-123456}
       - POSTGRES_DB=${DB_NAME:-my_agent}
+      - TZ=Asia/Shanghai
+      - PGTZ=Asia/Shanghai
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:

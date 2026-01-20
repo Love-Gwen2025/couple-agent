@@ -1,13 +1,13 @@
-﻿"""
-聊天服务 v2 - 使用 LangGraph 原生 checkpoint 分支
+"""
+聊天服务 v3 - 知识库集成架构
 
 架构：
 1. 只传 thread_id + checkpoint_id，LangGraph 自动管理历史
-2. RAG 和搜索作为工具，模型自主决定调用
-3. 每轮结束持久化到数据库（用于展示和审计）
+2. 知识库 RAG 自动集成到 context_retrieval 节点
+3. DeepSearch 模式支持知识库预检查
+4. 每轮结束持久化到数据库（用于展示和审计）
 """
 
-import asyncio
 import json
 from collections.abc import AsyncIterator
 
@@ -21,7 +21,9 @@ from app.core.constants import AI_SENDER_ID, MAX_TITLE_LENGTH
 from app.core.settings import Settings
 from app.services.conversation_service import ConversationService
 from app.services.embedding_service import EmbeddingService
+from app.services.langfuse_service import get_langfuse_service
 from app.services.model_service import ModelService
+from app.tasks.embedding_tasks import store_message_embedding_task
 from app.utils.content import extract_text_content
 
 # 系统提示词
@@ -31,18 +33,20 @@ SYSTEM_PROMPT = """你是一个智能助手。你可以使用以下工具来帮�
 - get_current_time: 获取当前时间
 - simple_calculator: 进行数学计算
 
-请根据用户的问题决定是否需要使用工具。保持回答简洁、准确、有帮助。"""
+系统会自动从知识库中检索相关信息并提供给你参考。
+请根据用户的问题和提供的参考资料进行回答。保持回答简洁、准确、有帮助。"""
 
 
 class ChatService:
     """
-    聊天服务 v2 - 使用 LangGraph 原生状态管理
+    聊天服务 v3 - 知识库集成架构
 
     特性：
     1. checkpoint_id 分支：支持从历史任意点分叉
     2. 代词消解：RewriteNode 自动处理
-    3. 工具自主调用：模型决定是否调用 RAG/搜索
-    4. 流式输出：逐 token 推送
+    3. 知识库 RAG：context_retrieval 节点自动检索
+    4. 工具自主调用：模型决定是否调用 RAG/搜索
+    5. 流式输出：逐 token 推送
     """
 
     def __init__(
@@ -79,6 +83,47 @@ class ChatService:
     def _has_model(self) -> bool:
         """检查是否已配置模型服务"""
         return self.model_service is not None
+
+    async def _get_model_for_user(
+        self,
+        user_id: int,
+        model_id: str | None,
+        db: AsyncSession | None,
+    ):
+        """
+        根据 model_id 获取对应的模型
+
+        逻辑：
+        1. 如果没有传 model_id，使用系统默认配置的 ModelService
+        2. 如果传了 model_id，查询用户模型并创建对应的 ModelService
+
+        Returns:
+            ChatModel 实例（LangChain 兼容）
+        """
+        from app.services.user_model_service import UserModelService
+
+        # 没有传 model_id，使用系统默认模型
+        if not model_id:
+            if self.model_service:
+                return self.model_service.get_model()
+            return None
+
+        # 有 model_id，查询用户模型
+        if db:
+            user_model_service = UserModelService(db)
+            # 直接根据 ID 获取并解密
+            target_model = await user_model_service.get_with_decrypted_key(user_id, int(model_id))
+
+            if target_model:
+                model_service = ModelService.from_user_model(target_model)
+                logger.info(f"Using user model: {target_model.model_name} (id={model_id})")
+                return model_service.get_model()
+
+        # 回退到系统模型
+        logger.warning(f"User model {model_id} not found, using system default")
+        if self.model_service:
+            return self.model_service.get_model()
+        return None
 
     def _build_langgraph_config(
         self,
@@ -181,9 +226,12 @@ class ChatService:
         conversation_id: int,
         content: str,
         model_code: str | None = None,
+        model_id: str | None = None,
         regenerate: bool = False,
         parent_message_id: int | None = None,
         db: AsyncSession | None = None,
+        mode: str = "chat",
+        knowledge_base_ids: list[int] | None = None,
     ) -> AsyncIterator[str]:
         """
         流式对话 - 使用 LangGraph 原生状态管理
@@ -193,7 +241,7 @@ class ChatService:
         1.1 如果是首次发送消息，自动生成标题
         2. 持久化用户消息（regenerate 模式下跳过）
         3. 设置 RAG 上下文
-        4. 调用 LangGraph（自动加载历史、执行工具）
+        4. 调用 LangGraph（自动加载历史、执行工具、检索知识库）
         5. 流式输出
         6. 持久化助手回复
 
@@ -201,10 +249,13 @@ class ChatService:
             user_id: 用户 ID
             conversation_id: 会话 ID
             content: 用户消息内容
-            model_code: 模型编码（可选）
+            model_code: 模型编码（保留兼容）
+            model_id: 用户模型 ID，传此参数则使用用户自定义模型
             regenerate: 重新生成模式，跳过用户消息持久化
             parent_message_id: 父消息 ID，用于构建消息树
             db: 数据库会话（用于 RAG）
+            mode: 对话模式 ("chat" | "deep_search")
+            knowledge_base_ids: 启用的知识库 ID 列表
 
         Yields:
             JSON 格式的 SSE 数据
@@ -227,10 +278,11 @@ class ChatService:
         # 用于在 checkpointer 上下文外访问的变量
         latest_checkpoint_id = None
 
-        if self._has_model():
-            async with create_checkpointer(self.settings) as checkpointer:
-                model = self.model_service.get_model()
+        # 动态获取模型（根据 model_id 选择用户模型或系统默认模型）
+        model = await self._get_model_for_user(user_id, model_id, db)
 
+        if model:
+            async with create_checkpointer(self.settings) as checkpointer:
                 # 创建带工具的 Agent
                 graph = create_default_agent(
                     model=model,
@@ -250,14 +302,58 @@ class ChatService:
                         HumanMessage(content=content),
                     ]
 
+                # 构建 Graph 输入状态
+                # 包含知识库配置和依赖注入
+                graph_input = {
+                    "messages": input_messages,
+                    "mode": mode,
+                    "question": content,
+                    "search_queries": [],
+                    "references": {},
+                    "planning_rounds": 0,
+                    # 知识库相关
+                    "knowledge_base_ids": knowledge_base_ids or [],
+                    "history_context": "",
+                    "kb_context": "",
+                    # 依赖注入（以 _ 开头，供节点内部使用）
+                    "_embedding_service": self.embedding_service,
+                    "_db_session": db,
+                    "_conversation_id": conversation_id,
+                }
+
                 # 使用 astream_events 获得 token 级流式输出
-                async for event in graph.astream_events(
-                    {"messages": input_messages}, config=config, version="v2"
-                ):
+                logger.info(
+                    f"[stream] Starting graph with mode={mode}, "
+                    f"kb_ids={knowledge_base_ids or []}"
+                )
+
+                # 注入 Langfuse callback（如果启用）
+                langfuse_service = get_langfuse_service(self.settings)
+                langfuse_handler = langfuse_service.get_callback_handler(
+                    user_id=str(user_id) if user_id else None,
+                    session_id=str(conversation_id),
+                    trace_name=f"{mode}_chat",
+                    metadata={"mode": mode, "regenerate": regenerate},
+                )
+                if langfuse_handler:
+                    config["callbacks"] = [langfuse_handler]
+                    logger.info("📊 Langfuse tracing enabled")
+
+                async for event in graph.astream_events(graph_input, config=config, version="v2"):
                     kind = event.get("event", "")
 
                     # LLM 生成的 token
                     if kind == "on_chat_model_stream":
+                        # 过滤掉非最终输出的节点（planning、search 等中间节点）
+                        # 只输出 chatbot（普通聊天）和 summary（DeepSearch 总结）节点的内容
+                        metadata = event.get("metadata", {})
+                        node_name = metadata.get("langgraph_node", "")
+
+                        # 允许输出的节点白名单
+                        output_nodes = {"chatbot", "summary"}
+                        if node_name and node_name not in output_nodes:
+                            continue  # 跳过中间节点的输出
+
                         chunk = event.get("data", {}).get("chunk")
                         if chunk and hasattr(chunk, "content") and chunk.content:
                             # 使用统一工具函数处理 Gemini 格式
@@ -319,32 +415,19 @@ class ChatService:
             checkpoint_id=latest_checkpoint_id,
         )
 
-        # 6. 异步存储 embedding（使用独立 session，避免请求结束后 session 已关闭）
-        if self.embedding_service:
+        # 6. 使用 Celery 异步存储 embedding（完全解耦，不阻塞响应）
+        if self.embedding_service and self.settings:
+            db_url = str(self.settings.database_url)
             if user_message:
-                # 正常模式：存储用户消息和 AI 回复
-                task = asyncio.create_task(
-                    self._store_embeddings_async(
-                        user_message.id,
-                        assistant_message.id,
-                        conversation_id,
-                        user_id,
-                        content,
-                        reply_text,
-                    )
+                # 正常模式：存储用户消息
+                store_message_embedding_task.delay(
+                    db_url, user_message.id, conversation_id, user_id, "user", content
                 )
-                task.add_done_callback(self._handle_task_exception)
-            else:
-                # regenerate 模式：只存储 AI 回复（用户消息已存过）
-                task = asyncio.create_task(
-                    self._store_ai_embedding_async(
-                        assistant_message.id,
-                        conversation_id,
-                        user_id,
-                        reply_text,
-                    )
-                )
-                task.add_done_callback(self._handle_task_exception)
+            # 存储 AI 回复
+            store_message_embedding_task.delay(
+                db_url, assistant_message.id, conversation_id, user_id, "assistant", reply_text
+            )
+            logger.debug(f"Queued embedding tasks for conversation {conversation_id}")
 
         # 7. 发送完成信号
         # 获取用户消息 ID（regenerate 时使用 parent_message_id）
@@ -362,90 +445,6 @@ class ChatService:
             },
             ensure_ascii=False,
         )
-
-    async def _store_embeddings_async(
-        self,
-        user_message_id: int,
-        assistant_message_id: int,
-        conversation_id: int,
-        user_id: int,
-        user_content: str,
-        assistant_content: str,
-        timeout: int = 30,
-    ) -> None:
-        """异步存储消息的 embedding（使用独立 session，带超时控制）"""
-        from app.core.db import SessionLocal
-
-        # 确保内容是字符串
-        user_content = extract_text_content(user_content)
-        assistant_content = extract_text_content(assistant_content)
-
-        try:
-            async with asyncio.timeout(timeout):
-                async with SessionLocal() as db:
-                    await self.embedding_service.store_message_embedding(
-                        db=db,
-                        message_id=user_message_id,
-                        conversation_id=conversation_id,
-                        user_id=user_id,
-                        role="user",
-                        content=user_content,
-                    )
-                    await self.embedding_service.store_message_embedding(
-                        db=db,
-                        message_id=assistant_message_id,
-                        conversation_id=conversation_id,
-                        user_id=user_id,
-                        role="assistant",
-                        content=assistant_content,
-                    )
-                    logger.info(
-                        f"Stored embeddings for messages {user_message_id}, {assistant_message_id}"
-                    )
-        except asyncio.TimeoutError:
-            logger.warning(f"Embedding store timeout after {timeout}s")
-        except Exception as e:
-            logger.error(f"Failed to store embeddings: {e}")
-
-    async def _store_ai_embedding_async(
-        self,
-        assistant_message_id: int,
-        conversation_id: int,
-        user_id: int,
-        assistant_content: str,
-        timeout: int = 30,
-    ) -> None:
-        """异步存储 AI 回复的 embedding（用于 regenerate 模式，带超时控制）"""
-        from app.core.db import SessionLocal
-
-        # 确保内容是字符串
-        assistant_content = extract_text_content(assistant_content)
-
-        try:
-            async with asyncio.timeout(timeout):
-                async with SessionLocal() as db:
-                    await self.embedding_service.store_message_embedding(
-                        db=db,
-                        message_id=assistant_message_id,
-                        conversation_id=conversation_id,
-                        user_id=user_id,
-                        role="assistant",
-                        content=assistant_content,
-                    )
-                    logger.info(f"Stored AI embedding for message {assistant_message_id}")
-        except asyncio.TimeoutError:
-            logger.warning(f"AI embedding store timeout after {timeout}s")
-        except Exception as e:
-            logger.error(f"Failed to store AI embedding: {e}")
-
-    def _handle_task_exception(self, task: asyncio.Task) -> None:
-        """处理异步任务异常"""
-        try:
-            task.result()
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.error(f"Background task failed: {e}")
 
     async def _get_latest_checkpoint_id(
         self,

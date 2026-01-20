@@ -51,9 +51,12 @@ async def stream_chat(
             conversation_id=int(payload.conversationId),
             content=payload.content,
             model_code=payload.modelCode,
+            model_id=payload.modelId,
             regenerate=payload.regenerate,
             parent_message_id=int(payload.parentMessageId) if payload.parentMessageId else None,
             db=db,
+            mode=payload.mode,
+            knowledge_base_ids=payload.knowledgeBaseIds,
         ):
             yield f"data: {chunk}\n\n"
 
@@ -80,9 +83,12 @@ async def chat(
             conversation_id=int(payload.conversationId),
             content=payload.content,
             model_code=payload.modelCode,
+            model_id=payload.modelId,
             regenerate=payload.regenerate,
             parent_message_id=int(payload.parentMessageId) if payload.parentMessageId else None,
             db=db,
+            mode=payload.mode,
+            knowledge_base_ids=payload.knowledgeBaseIds,
         ):
             data = json.loads(chunk)
             if data.get("type") == "chunk":

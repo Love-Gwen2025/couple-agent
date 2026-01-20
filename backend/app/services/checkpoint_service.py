@@ -5,19 +5,18 @@ Checkpoint 查询服务
 所有方法直接使用 checkpointer 读取数据，无需实例化 Agent。
 """
 
-import logging
 from typing import Any
+
+from loguru import logger
 
 from app.core.checkpointer import create_checkpointer
 from app.core.settings import Settings
-
-logger = logging.getLogger(__name__)
 
 
 class CheckpointService:
     """
     LangGraph Checkpoint 查询服务
-    
+
     直接使用 checkpointer 读取数据，无需实例化 Agent，性能更高。
     """
 
@@ -31,11 +30,11 @@ class CheckpointService:
     ) -> list[dict[str, Any]]:
         """
         获取会话的 checkpoint 历史列表（直接读取 checkpointer）
-        
+
         Args:
             conversation_id: 会话 ID
             limit: 返回数量限制
-            
+
         Returns:
             checkpoint 列表
         """
@@ -51,7 +50,7 @@ class CheckpointService:
     ) -> dict[str, Any]:
         """
         获取兄弟分支（深度锚点搜索版：解决中间节点导致的隔离问题）
-        
+
         算法：
         1. 深度回溯找到真正的锚点（messageCount 变小的边界）
         2. 找到所有从锚点派生的后代
@@ -59,7 +58,9 @@ class CheckpointService:
         """
         # 1. 获取足够的历史数据
         history = await self.get_state_history(conversation_id, limit=200)
-        logger.info(f"[get_sibling_checkpoints] history count={len(history)}, checkpoint_id={checkpoint_id}")
+        logger.info(
+            f"[get_sibling_checkpoints] history count={len(history)}, checkpoint_id={checkpoint_id}"
+        )
 
         if not history:
             return {"current": 0, "total": 1, "siblings": [checkpoint_id]}
@@ -99,7 +100,9 @@ class CheckpointService:
             cursor_id = node["parentId"]
             safety_break += 1
 
-        logger.info(f"[get_sibling_checkpoints] checkpoint={checkpoint_id} (cnt={current_count}) -> anchor={anchor_id}")
+        logger.info(
+            f"[get_sibling_checkpoints] checkpoint={checkpoint_id} (cnt={current_count}) -> anchor={anchor_id}"
+        )
 
         if not anchor_id:
             # 第一条消息或数据不完整
@@ -181,11 +184,11 @@ class CheckpointService:
     ) -> list[dict[str, Any]]:
         """
         获取指定 checkpoint 的消息列表（直接读取 checkpointer）
-        
+
         Args:
             conversation_id: 会话 ID
             checkpoint_id: checkpoint ID
-            
+
         Returns:
             消息列表
         """
@@ -237,10 +240,10 @@ class CheckpointService:
     ) -> list[dict[str, Any]]:
         """
         直接从 Checkpointer 读取状态，无需构建 Graph 实例，性能更高。
-        
+
         Args:
             conversation_id: 会话 ID
-            
+
         Returns:
             消息列表，格式与前端 Message 类型兼容
         """
@@ -249,21 +252,27 @@ class CheckpointService:
         async with create_checkpointer(self.settings) as checkpointer:
             # 1. 读取最新 checkpoint
             checkpoint_tuple = await checkpointer.aget(config)
-            logger.info(f"[get_latest_messages] checkpoint_tuple type={type(checkpoint_tuple)}, value={checkpoint_tuple}")
+            logger.info(
+                f"[get_latest_messages] checkpoint_tuple type={type(checkpoint_tuple)}, value={checkpoint_tuple}"
+            )
 
             if not checkpoint_tuple:
                 logger.info("[get_latest_messages] checkpoint_tuple is None/empty")
                 return []
 
             # 调试：输出 checkpoint 属性
-            logger.info(f"[get_latest_messages] hasattr checkpoint: {hasattr(checkpoint_tuple, 'checkpoint')}")
-            if hasattr(checkpoint_tuple, 'checkpoint'):
-                logger.info(f"[get_latest_messages] checkpoint_tuple.checkpoint={checkpoint_tuple.checkpoint}")
-
-            messages, checkpoint_id, parent_id = self._extract_checkpoint_payload(
-                checkpoint_tuple
+            logger.info(
+                f"[get_latest_messages] hasattr checkpoint: {hasattr(checkpoint_tuple, 'checkpoint')}"
             )
-            logger.info(f"[get_latest_messages] extracted messages count={len(messages)}, checkpoint_id={checkpoint_id}")
+            if hasattr(checkpoint_tuple, "checkpoint"):
+                logger.info(
+                    f"[get_latest_messages] checkpoint_tuple.checkpoint={checkpoint_tuple.checkpoint}"
+                )
+
+            messages, checkpoint_id, parent_id = self._extract_checkpoint_payload(checkpoint_tuple)
+            logger.info(
+                f"[get_latest_messages] extracted messages count={len(messages)}, checkpoint_id={checkpoint_id}"
+            )
 
             # 2. 读取历史，用于推导每条消息的所属 checkpoint
             history_map, latest_id = await self._load_history_map(checkpointer, config)
@@ -303,8 +312,12 @@ class CheckpointService:
 
         for idx, msg in enumerate(messages):
             # 1. 基础属性提取（兼容 dict 或 Object）
-            msg_type = getattr(msg, "type", None) or (msg.get("type") if isinstance(msg, dict) else None)
-            content = getattr(msg, "content", "") or (msg.get("content", "") if isinstance(msg, dict) else "")
+            msg_type = getattr(msg, "type", None) or (
+                msg.get("type") if isinstance(msg, dict) else None
+            )
+            content = getattr(msg, "content", "") or (
+                msg.get("content", "") if isinstance(msg, dict) else ""
+            )
 
             # 2. 角色映射
             if msg_type == "human":
@@ -353,17 +366,19 @@ class CheckpointService:
             additional_kwargs = getattr(msg, "additional_kwargs", {}) or {}
             create_time = additional_kwargs.get("created_at")
 
-            result.append({
-                "id": str(msg_id),
-                "conversationId": conversation_id,
-                "senderId": sender_id,
-                "role": role,
-                "content": content,
-                "contentType": "TEXT",
-                "createTime": create_time,
-                "checkpointId": checkpoint_id,
-                "parentCheckpointId": parent_id,
-            })
+            result.append(
+                {
+                    "id": str(msg_id),
+                    "conversationId": conversation_id,
+                    "senderId": sender_id,
+                    "role": role,
+                    "content": content,
+                    "contentType": "TEXT",
+                    "createTime": create_time,
+                    "checkpointId": checkpoint_id,
+                    "parentCheckpointId": parent_id,
+                }
+            )
 
         return result
 
@@ -390,11 +405,13 @@ class CheckpointService:
                 configurable = parent_config.get("configurable", {}) or {}
                 parent_id = configurable.get("checkpoint_id")
 
-            history.append({
-                "checkpointId": checkpoint.get("id"),
-                "parentId": parent_id,
-                "messageCount": len(messages),
-            })
+            history.append(
+                {
+                    "checkpointId": checkpoint.get("id"),
+                    "parentId": parent_id,
+                    "messageCount": len(messages),
+                }
+            )
         return history
 
     async def _load_history_map(
@@ -481,7 +498,7 @@ class CheckpointService:
     ) -> tuple[list[Any], str | None, str | None]:
         """
         兼容 aget 返回的格式，提取消息、checkpointId 与父 checkpointId。
-        
+
         注意：AsyncPostgresSaver.aget() 直接返回 checkpoint dict（不是 CheckpointTuple）
         格式：{'id': '...', 'channel_values': {'messages': [...]}, ...}
         """

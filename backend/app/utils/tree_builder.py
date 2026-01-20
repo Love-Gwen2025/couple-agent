@@ -33,11 +33,8 @@
     )
 """
 
-import logging
 from collections.abc import Callable
 from typing import Any, TypeVar
-
-logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -107,9 +104,7 @@ class TreeBuilder:
 
         # 3. 关键词过滤：找到所有匹配的节点
         if keyword and matchers:
-            matched_nodes = TreeBuilder._filter_by_keyword(
-                items, keyword, matchers
-            )
+            matched_nodes = TreeBuilder._filter_by_keyword(items, keyword, matchers)
         else:
             matched_nodes = items.copy()
 
@@ -119,9 +114,7 @@ class TreeBuilder:
         )
 
         # 5. 过滤出需要的节点
-        filtered_items = [
-            item for item in items if get_id(item) in required_ids
-        ]
+        filtered_items = [item for item in items if get_id(item) in required_ids]
 
         # 6. 找出根节点
         roots = [
@@ -141,9 +134,7 @@ class TreeBuilder:
 
         # 8. 递归构建树
         for root in roots:
-            TreeBuilder._build_recursively(
-                root, children_map, get_id, set_children
-            )
+            TreeBuilder._build_recursively(root, children_map, get_id, set_children)
 
         return roots
 
@@ -239,11 +230,7 @@ class TreeBuilder:
             兄弟节点列表（包含自身）
         """
         parent_id = get_parent_id(node)
-        return [
-            item
-            for item in all_items
-            if get_parent_id(item) == parent_id
-        ]
+        return [item for item in all_items if get_parent_id(item) == parent_id]
 
     # ==================== 私有方法 ====================
 
@@ -333,8 +320,6 @@ class TreeBuilder:
 
         # 递归处理每个子节点
         for child in children:
-            TreeBuilder._build_recursively(
-                child, children_map, get_id, set_children
-            )
+            TreeBuilder._build_recursively(child, children_map, get_id, set_children)
 
         set_children(current_node, children)

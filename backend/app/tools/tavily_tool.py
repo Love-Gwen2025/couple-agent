@@ -5,14 +5,12 @@ Tavily 网络搜索工具
 当用户询问需要最新信息的问题时使用。
 """
 
-import logging
 from functools import lru_cache
 
 from langchain_core.tools import tool
+from loguru import logger
 
 from app.core.settings import get_settings
-
-logger = logging.getLogger(__name__)
 
 
 @lru_cache
@@ -28,6 +26,7 @@ def _get_tavily_client():
 
     try:
         from tavily import TavilyClient
+
         return TavilyClient(api_key=settings.tavily_api_key)
     except ImportError:
         logger.error("tavily-python package not installed. Run: pip install tavily-python")
@@ -38,17 +37,17 @@ def _get_tavily_client():
 def web_search(query: str, max_results: int = 5) -> str:
     """
     在互联网上搜索信息。
-    
+
     当用户询问以下类型的问题时使用此工具：
     - 最新新闻或时事
     - 需要实时数据的问题（如天气、股价、赛事结果）
     - 你的知识库中没有的信息
     - 需要验证的事实
-    
+
     Args:
         query: 搜索查询词
         max_results: 返回的最大结果数量，默认5条
-    
+
     Returns:
         搜索结果摘要
     """

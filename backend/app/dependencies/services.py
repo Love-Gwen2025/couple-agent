@@ -62,19 +62,14 @@ def get_chat_service(
     """
     conv_service = ConversationService(db)
 
-    # 根据 ai_provider 判断是否有可用的 API Key
-    has_api_key = (
-        (settings.ai_provider == "deepseek" and settings.ai_deepseek_api_key)
-        or (settings.ai_provider == "openai" and settings.ai_openai_api_key)
-        or (settings.ai_provider == "gemini" and settings.ai_gemini_api_key)
-        or (settings.ai_provider == "custom" and settings.ai_custom_api_key)
-    )
+    # 检查系统默认模型（DeepSeek）是否配置
+    has_api_key = bool(settings.ai_deepseek_api_key)
     model_service = ModelService(settings) if has_api_key else None
 
-    # 可选服务 - 根据配置启用
+    # 可选服务 - 根据配置启用 Embedding
     embedding_service = None
     use_local_embedding = settings.ai_embedding_provider == "local"
-    has_remote_key = settings.ai_openai_api_key or settings.ai_embedding_api_key
+    has_remote_key = settings.ai_embedding_api_key
     if use_local_embedding or has_remote_key:
         embedding_service = EmbeddingService(settings)
 

@@ -3,6 +3,9 @@
  */
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Check, Sparkles, RefreshCw, Pencil, ThumbsUp, ThumbsDown, Share2, MoreHorizontal } from 'lucide-react';
@@ -90,7 +93,11 @@ export function MessageBubble({
   const showBranchNav = isAssistant && siblingInfo && siblingInfo.total > 1;
 
   return (
-    <div className={clsx("flex gap-4 p-2 mb-2 group/row w-full", isUser ? "flex-row-reverse" : "flex-row")}>
+    <div
+      className={clsx("flex gap-4 p-2 mb-2 group/row w-full", isUser ? "flex-row-reverse" : "flex-row")}
+      aria-live={isStreaming ? "polite" : undefined}
+      aria-busy={isStreaming}
+    >
 
       {/* Avatar Area */}
       <div className="flex-shrink-0 mt-1">
@@ -114,7 +121,7 @@ export function MessageBubble({
 
       {/* Content Area */}
       <div className={clsx("flex flex-col max-w-[85%] lg:max-w-[75%]", isUser ? "items-end" : "items-start")}>
-        
+
         <div className={clsx(
           "text-xs font-medium mb-1 px-1 opacity-90",
           isUser ? "text-muted" : "text-muted"
@@ -124,10 +131,10 @@ export function MessageBubble({
 
         <div className={clsx(
           "w-full relative",
-          // User messages: Clean solid color with subtle shadow
-          isUser && !isEditing ? "bg-surface-container-high text-foreground rounded-[20px] rounded-tr-sm px-5 py-3 shadow-sm border border-border/50" : "",
-          // Assistant messages: Transparent, clean typography
-          isAssistant ? "px-1 text-foreground" : ""
+          // User messages: Purple gradient with glow
+          isUser && !isEditing ? "bg-gradient-to-br from-purple-600 to-pink-500 text-white rounded-[24px] rounded-tr-sm px-5 py-3 shadow-[0_4px_15px_-5px_rgba(168,85,247,0.4)]" : "",
+          // Assistant messages: Glassy effect
+          isAssistant ? "px-1 text-gray-100" : ""
         )}>
 
           {isEditing ? (
@@ -159,7 +166,8 @@ export function MessageBubble({
                 <p className="whitespace-pre-wrap leading-relaxed text-[0.95rem]">{message.content}</p>
               ) : (
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
                   components={{
                     code({ className, children, ...props }) {
                       const match = /language-(\w+)/.exec(className || '');
@@ -183,24 +191,26 @@ export function MessageBubble({
         {/* Toolbar for AI Messages */}
         {isAssistant && !isStreaming && (
           <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover/row:opacity-100 transition-opacity duration-200 pl-1">
-             {showBranchNav && onNavigateBranch && (
+            {showBranchNav && onNavigateBranch && (
               <BranchNavigator
                 currentIndex={siblingInfo.current}
                 totalCount={siblingInfo.total}
                 onNavigate={onNavigateBranch}
               />
             )}
-            
+
             <div className="flex items-center gap-0.5 bg-surface-container border border-border/60 rounded-lg p-0.5 shadow-sm">
               <button
                 className="p-1.5 hover:bg-surface-highlight rounded-md text-muted hover:text-foreground transition-colors"
                 title="Good response"
+                aria-label="好的回复"
               >
                 <ThumbsUp className="w-3.5 h-3.5" />
               </button>
               <button
                 className="p-1.5 hover:bg-surface-highlight rounded-md text-muted hover:text-foreground transition-colors"
                 title="Bad response"
+                aria-label="不好的回复"
               >
                 <ThumbsDown className="w-3.5 h-3.5" />
               </button>
@@ -212,18 +222,21 @@ export function MessageBubble({
                 )}
                 onClick={onRegenerate}
                 title="Regenerate"
+                aria-label="重新生成"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
               <button
                 className="p-1.5 hover:bg-surface-highlight rounded-md text-muted hover:text-foreground transition-colors"
                 title="Share"
+                aria-label="分享"
               >
                 <Share2 className="w-3.5 h-3.5" />
               </button>
               <button
                 className="p-1.5 hover:bg-surface-highlight rounded-md text-muted hover:text-foreground transition-colors"
                 title="More"
+                aria-label="更多选项"
               >
                 <MoreHorizontal className="w-3.5 h-3.5" />
               </button>
@@ -238,6 +251,7 @@ export function MessageBubble({
               onClick={onEdit}
               className="p-1.5 rounded-lg hover:bg-surface-highlight text-muted hover:text-primary transition-colors"
               title="Edit"
+              aria-label="编辑消息"
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>

@@ -10,12 +10,10 @@
 - 重写后: "iPhone 15 的价格是多少？"
 """
 
-import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 REWRITE_PROMPT = """你是一个查询重写专家。你的任务是将用户的查询进行代词消解，使其更加明确。
 
@@ -38,10 +36,10 @@ async def rewrite_query(
 ) -> dict[str, Any]:
     """
     代词消解节点
-    
+
     输入 state:
       - messages: 消息列表
-    
+
     输出 state:
       - messages: 可能被重写后的消息列表
     """
@@ -72,7 +70,7 @@ async def rewrite_query(
             if isinstance(msg, HumanMessage):
                 history_context.append(f"用户: {msg.content}")
             else:
-                content = msg.content if hasattr(msg, 'content') else str(msg)
+                content = msg.content if hasattr(msg, "content") else str(msg)
                 history_context.append(f"助手: {content[:200]}")  # 限制长度
 
         history_str = "\n".join(history_context) if history_context else "无历史"
@@ -80,7 +78,9 @@ async def rewrite_query(
         # 调用 LLM 进行重写
         rewrite_messages = [
             SystemMessage(content=REWRITE_PROMPT),
-            HumanMessage(content=f"对话历史:\n{history_str}\n\n用户消息: {original_query}\n\n重写结果:"),
+            HumanMessage(
+                content=f"对话历史:\n{history_str}\n\n用户消息: {original_query}\n\n重写结果:"
+            ),
         ]
 
         response = await model.ainvoke(rewrite_messages)
@@ -102,13 +102,14 @@ async def rewrite_query(
 def create_rewrite_node(model):
     """
     创建代词消解节点
-    
+
     Args:
         model: LangChain 模型实例
-    
+
     Returns:
         节点函数
     """
+
     async def node(state: dict[str, Any]) -> dict[str, Any]:
         return await rewrite_query(state, model)
 

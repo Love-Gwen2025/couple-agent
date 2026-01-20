@@ -1,30 +1,34 @@
-/**
- * 会话相关 API
- */
 import apiClient from './client';
 import type {
   ApiResponse,
   Conversation,
   CreateConversationParams,
   Message,
+  PageResponse,
 } from '../types';
 
 /**
  * 获取会话列表（分页）
  *
- * @param limit 每页数量
- * @param offset 偏移量
+ * @param page 页码（从1开始）
+ * @param size 每页数量
  * @returns 会话列表和是否有更多
  */
 export async function getConversations(
-  limit: number = 20,
-  offset: number = 0
-): Promise<{ items: Conversation[]; hasMore: boolean }> {
-  const response = await apiClient.get<ApiResponse<{ items: Conversation[]; hasMore: boolean }>>(
+  page: number = 1,
+  size: number = 20
+): Promise<{ items: Conversation[]; hasMore: boolean; total: number }> {
+  const response = await apiClient.get<ApiResponse<PageResponse<Conversation>>>(
     '/conversation/list',
-    { params: { limit, offset } }
+    { params: { page, size } }
   );
-  return response.data.data || { items: [], hasMore: false };
+  const pageData = response.data.data;
+  // 转换为兼容旧格式，同时保留 total
+  return {
+    items: pageData?.records || [],
+    hasMore: (pageData?.current || 1) < (pageData?.pages || 0),
+    total: pageData?.total || 0,
+  };
 }
 
 /**

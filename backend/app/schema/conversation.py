@@ -35,10 +35,17 @@ class StreamChatParam(BaseModel):
 
     conversationId: str = Field(..., description="会话 ID")
     content: str = Field(..., description="用户消息内容")
-    modelCode: str | None = Field(default=None, description="模型编码")
+    modelCode: str | None = Field(default=None, description="模型编码（保留兼容）")
+    modelId: str | None = Field(
+        default=None, description="用户模型 ID，传此参数则使用用户自定义模型"
+    )
     systemPrompt: str | None = Field(default=None, description="系统提示词")
     parentMessageId: str | None = Field(default=None, description="父消息 ID，用于构建消息树")
     regenerate: bool = Field(default=False, description="重新生成模式，从父消息分叉生成新回复")
+    mode: str = Field(default="chat", description="对话模式: chat/deep_search")
+    knowledgeBaseIds: list[int] | None = Field(
+        default=None, description="启用的知识库 ID 列表，用于 RAG 检索"
+    )
 
 
 class MessageVo(BaseModel):
@@ -61,6 +68,7 @@ class MessageVo(BaseModel):
 
 class HistoryResponse(BaseModel):
     """消息历史响应，包含完整消息树"""
+
     messages: list[MessageVo] = Field(..., description="所有消息列表")
     currentMessageId: str | None = Field(default=None, description="当前选中的消息 ID")
 
@@ -91,24 +99,3 @@ class StreamChatEvent(BaseModel):
     error: str | None = Field(default=None, description="错误信息")
     tokenCount: int | None = Field(default=None, description="Token 使用量")
     checkpointId: str | None = Field(default=None, description="生成后的最新 checkpoint ID")
-
-
-class PageParams(BaseModel):
-    """
-    分页参数。
-    """
-
-    page: int | None = Field(default=1, description="页码")
-    size: int | None = Field(default=10, description="页大小")
-
-
-class PageResponse(BaseModel):
-    """
-    分页响应。
-    """
-
-    records: list = Field(default=[], description="记录列表")
-    total: int = Field(default=0, description="总记录数")
-    size: int = Field(default=10, description="页大小")
-    current: int = Field(default=1, description="当前页")
-    pages: int = Field(default=0, description="总页数")
