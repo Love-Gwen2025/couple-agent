@@ -64,10 +64,9 @@ class AgentState(TypedDict):
         references: 累积的参考资料 {query: [results]}
         planning_rounds: 当前规划轮次
 
-        # 内部依赖注入（通过 config 传入，以 _ 开头）
-        _embedding_service: Embedding 服务实例
-        _db_session: 数据库会话
-        _conversation_id: 会话 ID
+    注意：内部依赖（embedding_service, db_session, conversation_id）
+    通过 config['configurable'] 传递，而非放在 state 中，
+    以避免 LangGraph checkpoint 序列化问题。
     """
 
     messages: Annotated[list[AnyMessage], add_messages]
@@ -83,11 +82,6 @@ class AgentState(TypedDict):
     search_queries: list[str]
     references: dict[str, list[str]]
     planning_rounds: int
-
-    # 内部依赖注入
-    _embedding_service: Any
-    _db_session: Any
-    _conversation_id: int
 
 
 # ========== 2. 路由逻辑 ==========

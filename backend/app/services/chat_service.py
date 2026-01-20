@@ -52,37 +52,47 @@ class ChatService:
     def __init__(
         self,
         conversation_service: ConversationService,
-        model_service: ModelService | None = None,
         embedding_service: EmbeddingService | None = None,
         settings: Settings | None = None,
     ):
         self.conversation_service = conversation_service
-        self.model_service = model_service
         self.embedding_service = embedding_service
         self.settings = settings
 
-    async def _create_title(self, msg: str) -> str:
+    async def _create_title(
+        self,
+        msg: str,
+        user_id: int,
+        model_id: str | None,
+        db: AsyncSession | None,
+    ) -> str:
         """
         根据消息内容自动生成会话标题
 
-        使用构造时注入的 model_service，避免每次创建新实例
+        使用用户配置的模型生成标题，如果没有模型则截断消息
         """
-        prompt = f"""
-根据传入的消息,生成一个5-10字左右的标题,内容力求准确,简明,扼要。
-只输出标题本身，不要加引号或其他内容。
-消息: {msg}
-标题:"""
-        # 使用已注入的 model_service，如果没有则返回截断的消息作为标题
-        if self.model_service:
-            response = await self.model_service.chat(prompt)
-            return response.strip()[:MAX_TITLE_LENGTH]
+        # 尝试用用户模型生成标题
+        model = await self._get_model_for_user(user_id, model_id, db)
+        if model:
+            try:
+                from langchain_core.messages import HumanMessage as HM
+
+                prompt = (
+                    "根据传入的消息,生成一个5-10字左右的标题,"
+                    "内容力求准确,简明,扼要。"
+                    "只输出标题本身，不要加引号或其他内容。\n"
+                    f"消息: {msg}\n标题:"
+                )
+                response = await model.ainvoke([HM(content=prompt)])
+                title = extract_text_content(response.content)
+                return title.strip()[:MAX_TITLE_LENGTH]
+            except Exception as e:
+                logger.warning(f"Failed to generate title with AI: {e}")
+
+        # 回退：截断消息作为标题
         return msg[:MAX_TITLE_LENGTH]
 
     # _ensure_string 已移除，使用 app.utils.content.extract_text_content 替代
-
-    def _has_model(self) -> bool:
-        """检查是否已配置模型服务"""
-        return self.model_service is not None
 
     async def _get_model_for_user(
         self,
@@ -91,27 +101,23 @@ class ChatService:
         db: AsyncSession | None,
     ):
         """
-        根据 model_id 获取对应的模型
+        根据 model_id 获取用户配置的模型
 
-        逻辑：
-        1. 如果没有传 model_id，使用系统默认配置的 ModelService
-        2. 如果传了 model_id，查询用户模型并创建对应的 ModelService
+        注意：不再有系统默认模型，必须传入有效的 model_id
 
         Returns:
-            ChatModel 实例（LangChain 兼容）
+            ChatModel 实例（LangChain 兼容），如果未找到则返回 None
         """
         from app.services.user_model_service import UserModelService
 
-        # 没有传 model_id，使用系统默认模型
+        # 没有传 model_id，直接返回 None
         if not model_id:
-            if self.model_service:
-                return self.model_service.get_model()
+            logger.warning("No model_id provided, cannot proceed without user model")
             return None
 
-        # 有 model_id，查询用户模型
+        # 查询用户模型
         if db:
             user_model_service = UserModelService(db)
-            # 直接根据 ID 获取并解密
             target_model = await user_model_service.get_with_decrypted_key(user_id, int(model_id))
 
             if target_model:
@@ -119,10 +125,7 @@ class ChatService:
                 logger.info(f"Using user model: {target_model.model_name} (id={model_id})")
                 return model_service.get_model()
 
-        # 回退到系统模型
-        logger.warning(f"User model {model_id} not found, using system default")
-        if self.model_service:
-            return self.model_service.get_model()
+        logger.warning(f"User model {model_id} not found")
         return None
 
     def _build_langgraph_config(
@@ -177,8 +180,10 @@ class ChatService:
         conversation_id: int,
         content: str,
         model_code: str | None,
+        model_id: str | None,
         regenerate: bool,
         parent_message_id: int | None,
+        db: AsyncSession | None,
     ) -> tuple:
         """
         准备流式对话的上下文
@@ -192,7 +197,7 @@ class ChatService:
         # 2. 首次消息时生成标题
         generated_title = None
         if not conversation.current_message_id:
-            generated_title = await self._create_title(content)
+            generated_title = await self._create_title(content, user_id, model_id, db)
             await self.conversation_service.modify_conversation(
                 user_id, conversation_id, generated_title
             )
@@ -262,7 +267,14 @@ class ChatService:
         """
         # 1. 准备上下文（校验归属、生成标题、持久化用户消息、处理 regenerate）
         _, generated_title, user_message, parent_checkpoint_id = await self._prepare_stream_context(
-            user_id, conversation_id, content, model_code, regenerate, parent_message_id
+            user_id,
+            conversation_id,
+            content,
+            model_code,
+            model_id,
+            regenerate,
+            parent_message_id,
+            db,
         )
 
         full_reply = []
@@ -315,16 +327,14 @@ class ChatService:
                     "knowledge_base_ids": knowledge_base_ids or [],
                     "history_context": "",
                     "kb_context": "",
-                    # 依赖注入（以 _ 开头，供节点内部使用）
-                    "_embedding_service": self.embedding_service,
-                    "_db_session": db,
-                    "_conversation_id": conversation_id,
+                    # 注意：embedding_service, db_session, conversation_id
+                    # 通过 config['configurable'] 传递，不放在 state 中，
+                    # 以避免 LangGraph checkpoint 序列化问题
                 }
 
                 # 使用 astream_events 获得 token 级流式输出
                 logger.info(
-                    f"[stream] Starting graph with mode={mode}, "
-                    f"kb_ids={knowledge_base_ids or []}"
+                    f"[stream] Starting graph with mode={mode}, kb_ids={knowledge_base_ids or []}"
                 )
 
                 # 注入 Langfuse callback（如果启用）

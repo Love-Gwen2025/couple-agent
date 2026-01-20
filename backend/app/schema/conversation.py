@@ -1,15 +1,19 @@
 """
 Pydantic Schema 定义
 
-注意: 所有雪花 ID 使用 str 类型，避免 JavaScript 大整数精度丢失
+注意: 所有雪花 ID 使用 SnowflakeId 类型，自动序列化为字符串，避免 JavaScript 大整数精度丢失
 """
 
 from pydantic import BaseModel, Field
+
+from app.schema.base import SnowflakeId
 
 
 class ConversationParam(BaseModel):
     """
     会话创建或修改参数。
+
+    注意：入参从前端接收，已经是字符串格式
     """
 
     id: str | None = Field(default=None, description="会话 ID，可为空")
@@ -51,38 +55,42 @@ class StreamChatParam(BaseModel):
 class MessageVo(BaseModel):
     """
     消息视图对象，用于统一返回消息。
+
+    所有雪花ID字段使用 SnowflakeId 类型自动序列化
     """
 
-    id: str = Field(..., description="消息 ID")
-    conversationId: str = Field(..., description="会话 ID")
-    senderId: str = Field(..., description="发送者 ID")
+    id: SnowflakeId = Field(..., description="消息 ID")
+    conversationId: SnowflakeId = Field(..., description="会话 ID")
+    senderId: SnowflakeId = Field(..., description="发送者 ID")
     role: str = Field(..., description="角色 user/assistant")
     content: str = Field(..., description="消息内容")
     contentType: str = Field(default="TEXT", description="消息类型")
     modelCode: str | None = Field(default=None, description="模型编码")
     tokenCount: int | None = Field(default=None, description="Token 数")
     createTime: str | None = Field(default=None, description="创建时间 ISO8601")
-    parentId: str | None = Field(default=None, description="父消息 ID，用于分支导航")
-    checkpointId: str | None = Field(default=None, description="关联的 checkpoint ID")
+    parentId: SnowflakeId | None = Field(default=None, description="父消息 ID，用于分支导航")
+    checkpointId: str | None = Field(default=None, description="关联的 checkpoint ID（UUID格式）")
 
 
 class HistoryResponse(BaseModel):
     """消息历史响应，包含完整消息树"""
 
     messages: list[MessageVo] = Field(..., description="所有消息列表")
-    currentMessageId: str | None = Field(default=None, description="当前选中的消息 ID")
+    currentMessageId: SnowflakeId | None = Field(default=None, description="当前选中的消息 ID")
 
 
 class ConversationVo(BaseModel):
     """
     会话概要视图。
+
+    所有雪花ID字段使用 SnowflakeId 类型自动序列化
     """
 
-    id: str = Field(..., description="会话 ID")
+    id: SnowflakeId = Field(..., description="会话 ID")
     title: str | None = Field(default=None, description="会话标题")
-    userId: str = Field(..., description="拥有者 ID")
+    userId: SnowflakeId = Field(..., description="拥有者 ID")
     modelCode: str | None = Field(default=None, description="默认模型编码")
-    lastMessageId: str | None = Field(default=None, description="最后一条消息 ID")
+    lastMessageId: SnowflakeId | None = Field(default=None, description="最后一条消息 ID")
     lastMessageAt: str | None = Field(default=None, description="最后消息时间 ISO8601")
     avatar: str | None = Field(default=None, description="会话头像")
 
@@ -90,6 +98,9 @@ class ConversationVo(BaseModel):
 class StreamChatEvent(BaseModel):
     """
     SSE 流式事件。
+
+    注意：这些字段在运行时通过 json.dumps 直接序列化，不经过 Pydantic，
+    因此保持 str 类型即可。
     """
 
     type: str = Field(..., description="事件类型：chunk/done/error")

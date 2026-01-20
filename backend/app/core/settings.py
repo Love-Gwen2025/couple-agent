@@ -71,14 +71,6 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = Field(default=60, description="过期分钟数")
     jwt_issuer: str = Field(default="my-agent", description="颁发者")
 
-    # ==================== DeepSeek 配置（系统默认模型） ====================
-    # 其他提供商通过用户自定义模型功能配置
-    ai_deepseek_api_key: str | None = Field(default=None, description="API Key")
-    ai_deepseek_base_url: str = Field(default="https://api.deepseek.com", description="基础地址")
-    ai_deepseek_model_name: str = Field(default="deepseek-chat", description="模型名称")
-    ai_deepseek_temperature: float = Field(default=0.7, description="温度")
-    ai_deepseek_timeout: int = Field(default=30, description="超时(秒)")
-
     # ==================== Embedding 向量化 ====================
     ai_embedding_provider: str = Field(default="local", description="提供商: local/openai/deepseek")
     ai_embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", description="模型名称")

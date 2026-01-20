@@ -42,14 +42,6 @@ services:
       - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES:-60}
       - JWT_ISSUER=${JWT_ISSUER:-my-agent}
 
-      # ==================== DeepSeek 配置（系统默认模型） ====================
-      # 其他提供商通过用户自定义模型功能配置
-      - AI_DEEPSEEK_API_KEY=${AI_DEEPSEEK_API_KEY}
-      - AI_DEEPSEEK_BASE_URL=${AI_DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-      - AI_DEEPSEEK_MODEL_NAME=${AI_DEEPSEEK_MODEL_NAME:-deepseek-chat}
-      - AI_DEEPSEEK_TEMPERATURE=${AI_DEEPSEEK_TEMPERATURE:-0.7}
-      - AI_DEEPSEEK_TIMEOUT=${AI_DEEPSEEK_TIMEOUT:-30}
-
       # ==================== Embedding 向量化 ====================
       - AI_EMBEDDING_PROVIDER=${AI_EMBEDDING_PROVIDER:-local}
       - AI_EMBEDDING_MODEL=${AI_EMBEDDING_MODEL:-BAAI/bge-small-zh-v1.5}

@@ -47,8 +47,8 @@ class DocumentChunk(Base):
         转为接口返回的视图对象（不含向量）
         """
         return {
-            "id": str(self.id),
-            "documentId": str(self.document_id),
+            "id": self.id,  # SnowflakeId 会自动序列化为字符串
+            "documentId": self.document_id,  # SnowflakeId 会自动序列化为字符串
             "chunkIndex": self.chunk_index,
             "content": self.content,
             "metadata": self.chunk_metadata,

@@ -1,24 +1,9 @@
 @import "tailwindcss";
 
-/* Google Fonts */
+/* Google Fonts - 使用 Outfit 作为主要字体（风格类似 Google Sans/Product Sans） */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
-
-@font-face {
-  font-family: 'Google Sans';
-  src: local('Google Sans'), local('Product Sans'), url('https://fonts.gstatic.com/s/googlesans/v45/4UaGrENHsxJlGDuGo1OIlL3Owp5eKQtGbl8.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Google Sans';
-  src: local('Google Sans Medium'), local('Product Sans Medium'), url('https://fonts.gstatic.com/s/googlesans/v45/4UaGrENHsxJlGDuGo1OIlL3Owp5eKQtGbl8.woff2') format('woff2');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
 
 :root {
   /* Modern Clean Light Theme */
@@ -94,7 +79,7 @@
 body {
   background-color: rgb(var(--background));
   color: rgb(var(--foreground));
-  font-family: 'Google Sans', 'Inter', 'Roboto', system-ui, sans-serif;
+  font-family: 'Outfit', 'Inter', 'Roboto', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.6;
@@ -259,7 +244,7 @@ body {
    ═══════════════════════════════════════════════════════════════ */
 
 .markdown-body {
-  font-family: 'Google Sans', 'Inter', sans-serif !important;
+  font-family: 'Outfit', 'Inter', sans-serif !important;
   font-size: 1rem;
   line-height: 1.75;
   color: rgb(var(--foreground));
@@ -398,6 +383,7 @@ select:focus-visible,
 
 /* 尊重用户的动画偏好设置 */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {

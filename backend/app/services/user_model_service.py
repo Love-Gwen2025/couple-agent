@@ -76,6 +76,8 @@ class UserModelService:
 
         用于实际调用 AI 时获取明文 API Key
 
+        注意：返回的对象已从 session 中分离，修改不会影响数据库
+
         Args:
             user_id: 用户 ID
             model_id: 模型 ID
@@ -85,6 +87,8 @@ class UserModelService:
         """
         model = await self.get(user_id, model_id)
         if model:
+            # 重要：先从 session 中分离对象，防止解密后的值被意外写回数据库
+            self.db.expunge(model)
             # 解密 API Key
             model.api_key = decrypt_api_key(model.api_key)
         return model
@@ -240,6 +244,8 @@ class UserModelService:
         """
         获取用户默认模型并解密 API Key
 
+        注意：返回的对象已从 session 中分离，修改不会影响数据库
+
         Args:
             user_id: 用户 ID
 
@@ -248,5 +254,7 @@ class UserModelService:
         """
         model = await self.get_default(user_id)
         if model:
+            # 重要：先从 session 中分离对象，防止解密后的值被意外写回数据库
+            self.db.expunge(model)
             model.api_key = decrypt_api_key(model.api_key)
         return model

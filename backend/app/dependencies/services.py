@@ -17,7 +17,6 @@ from app.services.auth_service import AuthService
 from app.services.chat_service import ChatService
 from app.services.conversation_service import ConversationService
 from app.services.embedding_service import EmbeddingService
-from app.services.model_service import ModelService
 from app.utils.session_store import SessionStore
 
 # ==================== 基础服务依赖 ====================
@@ -58,13 +57,9 @@ def get_chat_service(
     """
     获取 ChatService 实例
 
-    根据配置自动决定是否启用 ModelService 和 EmbeddingService
+    不再使用内置模型，用户需在应用内自行配置模型
     """
     conv_service = ConversationService(db)
-
-    # 检查系统默认模型（DeepSeek）是否配置
-    has_api_key = bool(settings.ai_deepseek_api_key)
-    model_service = ModelService(settings) if has_api_key else None
 
     # 可选服务 - 根据配置启用 Embedding
     embedding_service = None
@@ -75,7 +70,6 @@ def get_chat_service(
 
     return ChatService(
         conversation_service=conv_service,
-        model_service=model_service,
         embedding_service=embedding_service,
         settings=settings,
     )

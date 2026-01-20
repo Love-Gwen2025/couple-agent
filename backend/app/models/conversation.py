@@ -24,16 +24,17 @@ class Conversation(Base):
 
     def to_vo(self) -> dict:
         """
-        1. 转为接口会话视图。
-        注意: BigInt ID 转为字符串，避免 JavaScript 精度丢失
+        转为接口会话视图（简单场景备用）。
+
+        注意: 推荐使用 ConversationConverter.to_vo()，
+        它会配合 SnowflakeId 类型自动处理 BigInt 序列化。
         """
         return {
-            "id": str(self.id),
+            "id": self.id,  # SnowflakeId 会自动序列化为字符串
             "title": self.title,
-            "userId": str(self.user_id),
+            "userId": self.user_id,  # SnowflakeId 会自动序列化为字符串
             "modelCode": self.model_code,
-            "lastMessageId": str(self.last_message_id) if self.last_message_id else None,
+            "lastMessageId": self.last_message_id,  # SnowflakeId | None 自动处理
             "lastMessageAt": self.last_message_at.isoformat() if self.last_message_at else None,
             "avatar": self.avatar,
         }
-

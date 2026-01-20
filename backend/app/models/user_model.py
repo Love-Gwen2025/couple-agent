@@ -66,7 +66,7 @@ class UserModel(Base):
         注意：不返回 api_key 字段
         """
         return {
-            "id": str(self.id),
+            "id": self.id,  # SnowflakeId 会自动序列化为字符串
             "modelName": self.model_name,
             "provider": self.provider,
             "modelCode": self.model_code,

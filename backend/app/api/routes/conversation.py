@@ -81,7 +81,7 @@ async def history(
     return ApiResult.ok(
         HistoryResponse(
             messages=[MessageConverter.to_vo(msg) for msg in messages],
-            currentMessageId=str(current_message_id) if current_message_id else None,
+            currentMessageId=current_message_id,
         )
     )
 

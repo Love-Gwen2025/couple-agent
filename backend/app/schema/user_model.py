@@ -4,6 +4,8 @@
 
 from pydantic import BaseModel, Field
 
+from app.schema.base import SnowflakeId
+
 
 class UserModelPayload(BaseModel):
     """
@@ -48,7 +50,7 @@ class UserModelVo(BaseModel):
     注意：不返回 apiKey 字段保护敏感信息
     """
 
-    id: str = Field(..., description="模型 ID")
+    id: SnowflakeId = Field(..., description="模型 ID（自动序列化为字符串）")
     modelName: str = Field(..., description="模型显示名称")
     provider: str = Field(..., description="提供商")
     modelCode: str = Field(..., description="模型编码")

@@ -5,7 +5,6 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 from loguru import logger
 
-from app.core.settings import Settings
 from app.utils.content import extract_text_content
 
 
@@ -14,38 +13,11 @@ class ModelService:
     模型服务层 - 封装 LLM 调用逻辑
 
     职责：
-    1. 管理 LLM 客户端 (系统默认 DeepSeek，其他通过用户自定义模型支持)
+    1. 管理 LLM 客户端（所有模型都由用户自行配置）
     2. 提供同步/流式对话接口
     3. 封装不同模型的输出格式差异
     4. 支持从用户自定义模型创建实例
     """
-
-    def __init__(self, settings: Settings):
-        """
-        初始化模型服务
-
-        系统默认使用 DeepSeek，其他提供商通过用户自定义模型支持
-        """
-        self.model = self._create_model(settings)
-        logger.info("ModelService initialized with DeepSeek")
-
-    def _create_model(self, settings: Settings) -> BaseChatModel:
-        """
-        创建 DeepSeek 模型实例
-
-        系统默认使用 DeepSeek，其他提供商通过用户自定义模型支持
-
-        Returns:
-            BaseChatModel: LangChain 兼容的 ChatModel 实例
-        """
-        logger.info(f"Creating ChatOpenAI (DeepSeek): model={settings.ai_deepseek_model_name}")
-        return ChatOpenAI(
-            api_key=settings.ai_deepseek_api_key or "",
-            base_url=settings.ai_deepseek_base_url,
-            model=settings.ai_deepseek_model_name,
-            temperature=settings.ai_deepseek_temperature,
-            timeout=settings.ai_deepseek_timeout,
-        )
 
     @classmethod
     def from_user_model(

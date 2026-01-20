@@ -1,9 +1,37 @@
-from typing import Generic, TypeVar
+from typing import Annotated, Generic, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PlainSerializer
 from pydantic.generics import GenericModel
 
 T = TypeVar("T")
+
+
+# ========== 雪花ID类型定义 ==========
+# JavaScript Number 类型只能精确表示到 2^53 (约 9千万亿)
+# 雪花ID 通常远超这个范围，JSON 解析时会丢失精度
+# 使用此类型可自动将 int 序列化为 str，避免前端精度问题
+
+
+def _serialize_snowflake_id(v: int | str | None) -> str | None:
+    """将雪花ID序列化为字符串"""
+    return str(v) if v is not None else None
+
+
+SnowflakeId = Annotated[
+    int | str,  # 允许 int 或 str 输入
+    PlainSerializer(_serialize_snowflake_id, return_type=str | None),
+]
+"""
+雪花ID类型 - 自动序列化为字符串
+
+用法:
+    class MyVo(BaseModel):
+        id: SnowflakeId  # 输入可以是 int 或 str，输出始终是 str
+
+示例:
+    vo = MyVo(id=271928414351396864)
+    vo.model_dump_json()  # {"id": "271928414351396864"}
+"""
 
 
 class ApiResult(GenericModel, Generic[T]):

@@ -48,7 +48,7 @@ class Document(Base):
         转为接口返回的视图对象
         """
         return {
-            "id": str(self.id),
+            "id": self.id,  # SnowflakeId 会自动序列化为字符串
             "fileName": self.file_name,
             "fileUrl": self.file_url,
             "fileSize": self.file_size,

@@ -43,53 +43,23 @@ async def list_models(
     """
     返回可用模型列表
 
-    包含:
-    1. 系统默认模型 (DeepSeek-Chat)
-    2. 用户自定义模型 (如已登录)
+    只返回用户自定义模型（系统不再内置默认模型）
     """
     models: list[ModelVo] = []
 
-    # 1. 系统默认模型 - DeepSeek Chat
-    models.append(
-        ModelVo(
-            id=0,
-            modelCode="deepseek-chat",
-            modelName="DeepSeek Chat (默认)",
-            provider="deepseek",
-            isDefault=True,
-            status=1,
-        )
-    )
-
-    # 2. 用户自定义模型
+    # 用户自定义模型
     if current_user:
         service = UserModelService(db)
         user_models = await service.list(current_user.id)
 
-        # 如果用户有自定义模型，检查是否有默认模型
-        has_user_default = any(m.is_default for m in user_models)
-
-        for idx, m in enumerate(user_models):
-            # 如果用户设置了默认模型，系统默认模型不再是默认
-            is_default = m.is_default
-            if has_user_default and idx == 0:
-                # 取消系统默认模型的默认状态
-                models[0] = ModelVo(
-                    id=0,
-                    modelCode="deepseek-chat",
-                    modelName="DeepSeek Chat (系统)",
-                    provider="deepseek",
-                    isDefault=False,
-                    status=1,
-                )
-
+        for m in user_models:
             models.append(
                 ModelVo(
-                    id=int(m.id) if m.id else idx + 1,
+                    id=m.id or 0,
                     modelCode=m.model_code,
                     modelName=m.model_name,
                     provider=m.provider,
-                    isDefault=is_default,
+                    isDefault=m.is_default,
                     status=m.status,
                 )
             )

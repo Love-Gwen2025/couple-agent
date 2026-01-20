@@ -68,7 +68,7 @@ export interface HistoryMessage {
 
 /** AI 模型信息 */
 export interface AiModel {
-  id: number;
+  id: string;  // 使用 string 避免雪花ID大整数精度丢失
   modelCode: string;
   modelName: string;
   provider: string;

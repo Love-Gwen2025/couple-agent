@@ -12,6 +12,7 @@ import asyncio
 from typing import Any
 
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
 from loguru import logger
 
 from app.utils.content import extract_text_content
@@ -146,28 +147,31 @@ def create_context_node(settings):
         节点函数
     """
 
-    async def context_node(state: dict[str, Any]) -> dict[str, Any]:
+    async def context_node(state: dict[str, Any], config: RunnableConfig) -> dict[str, Any]:
         """
         上下文增强节点：并行获取历史和知识库上下文
 
         输入 state:
           - messages: 消息列表
-          - embedding_service: Embedding 服务（通过 config 注入）
-          - db_session: 数据库会话（通过 config 注入）
-          - conversation_id: 会话 ID（通过 config 注入）
           - knowledge_base_ids: 知识库 ID 列表
+
+        从 config['configurable'] 获取:
+          - embedding_service: Embedding 服务
+          - db_session: 数据库会话
+          - conversation_id: 会话 ID
 
         输出 state:
           - history_context: 历史对话上下文
           - kb_context: 知识库上下文
         """
         messages = state.get("messages", [])
-
-        # 从 state 中获取注入的依赖
-        embedding_service = state.get("_embedding_service")
-        db_session = state.get("_db_session")
-        conversation_id = state.get("_conversation_id")
         knowledge_base_ids = state.get("knowledge_base_ids", [])
+
+        # 从 config 中获取注入的依赖（避免放在 state 中导致序列化问题）
+        configurable = config.get("configurable", {})
+        embedding_service = configurable.get("embedding_service")
+        db_session = configurable.get("db_session")
+        conversation_id = configurable.get("conversation_id")
 
         # 提取用户查询
         query = ""

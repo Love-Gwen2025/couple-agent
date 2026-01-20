@@ -40,7 +40,7 @@ class KnowledgeBase(Base):
         转为接口返回的视图对象
         """
         return {
-            "id": str(self.id),
+            "id": self.id,  # SnowflakeId 会自动序列化为字符串
             "name": self.name,
             "description": self.description,
             "documentCount": self.document_count,

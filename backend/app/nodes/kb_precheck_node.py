@@ -15,6 +15,7 @@ DeepSearch 模式的知识库预检查，负责：
 from typing import Any
 
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
 from loguru import logger
 
 from app.utils.content import extract_text_content
@@ -31,7 +32,7 @@ def create_kb_precheck_node(settings):
         节点函数
     """
 
-    async def kb_precheck_node(state: dict[str, Any]) -> dict[str, Any]:
+    async def kb_precheck_node(state: dict[str, Any], config: RunnableConfig) -> dict[str, Any]:
         """
         知识库预检查节点：在 DeepSearch 规划前检索内部知识
 
@@ -39,8 +40,10 @@ def create_kb_precheck_node(settings):
           - messages: 消息列表
           - question: 用户问题（可选，会自动从 messages 提取）
           - knowledge_base_ids: 知识库 ID 列表
-          - _embedding_service: Embedding 服务（通过 config 注入）
-          - _db_session: 数据库会话（通过 config 注入）
+
+        从 config['configurable'] 获取:
+          - embedding_service: Embedding 服务
+          - db_session: 数据库会话
 
         输出 state:
           - references: 更新后的参考资料（注入内部知识）
@@ -52,9 +55,10 @@ def create_kb_precheck_node(settings):
         references = state.get("references", {})
         knowledge_base_ids = state.get("knowledge_base_ids", [])
 
-        # 从 state 中获取注入的依赖
-        embedding_service = state.get("_embedding_service")
-        db_session = state.get("_db_session")
+        # 从 config 中获取注入的依赖（避免放在 state 中导致序列化问题）
+        configurable = config.get("configurable", {})
+        embedding_service = configurable.get("embedding_service")
+        db_session = configurable.get("db_session")
 
         # 如果没有明确的 question，从最后一条用户消息提取
         if not question:

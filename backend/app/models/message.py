@@ -9,7 +9,7 @@ from app.models.base import Base
 class Message(Base):
     """
     消息实体，对应 t_message 表。
-    
+
     支持消息树结构：通过 parent_id 构建分支关系
     """
 
@@ -33,22 +33,23 @@ class Message(Base):
 
     def to_vo(self) -> dict:
         """
-        转为接口需要的消息视图。
-        注意: BigInt ID 转为字符串，避免 JavaScript 精度丢失
+        转为接口需要的消息视图（简单场景备用）。
+
+        注意: 推荐使用 MessageConverter.to_vo()，
+        它会配合 SnowflakeId 类型自动处理 BigInt 序列化。
         """
         return {
-            "id": str(self.id),
-            "conversationId": str(self.conversation_id),
-            "senderId": str(self.sender_id),
+            "id": self.id,  # SnowflakeId 会自动序列化为字符串
+            "conversationId": self.conversation_id,  # SnowflakeId 会自动序列化为字符串
+            "senderId": self.sender_id,  # SnowflakeId 会自动序列化为字符串
             "role": self.role,
             "content": self.content,
             "contentType": self.content_type,
             "modelCode": self.model_code,
             "tokenCount": self.token_count,
-            "parentId": str(self.parent_id) if self.parent_id else None,
+            "parentId": self.parent_id,  # SnowflakeId | None 自动处理
             "checkpointId": self.checkpoint_id,
             "createTime": self.create_time.isoformat()
             if isinstance(self.create_time, datetime)
             else None,
         }
-

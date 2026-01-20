@@ -14,7 +14,7 @@
 
 | 模块 | 功能描述 |
 |------|----------|
-| **智能对话** | 基于 LangGraph 工作流，支持 DeepSeek / OpenAI / Gemini 等多模型 |
+| **智能对话** | 基于 LangGraph 工作流，支持 OpenAI / DeepSeek / Gemini 等多模型（用户自行配置） |
 | **联网搜索** | 集成 Tavily Search，实时获取网络信息增强回答 |
 | **知识库 RAG** | 支持 PDF/DOCX 文档解析，pgvector 向量检索 + BM25 混合召回 |
 | **用户模型** | 用户可自定义配置第三方 LLM 模型（API Key 加密存储） |
@@ -102,7 +102,8 @@ my-agent/
 cp .env.example .env
 
 # 编辑 .env，填入必要配置
-# 必填: DB_PASSWORD, REDIS_PASSWORD, JWT_SECRET, AI_DEEPSEEK_API_KEY
+# 必填: DB_PASSWORD, REDIS_PASSWORD, JWT_SECRET
+# 可选: TAVILY_API_KEY (联网搜索), LANGFUSE_* (可观测性)
 ```
 
 ### 2️⃣ Docker 一键启动
@@ -159,8 +160,7 @@ make frontend-run
 | `JWT_SECRET` | JWT 密钥 | - |
 | `JWT_EXPIRE_MINUTES` | Token 过期时间(分钟) | `60` |
 | **AI 模型** |||
-| `AI_DEEPSEEK_API_KEY` | DeepSeek API Key | - |
-| `AI_DEEPSEEK_MODEL_NAME` | 模型名称 | `deepseek-chat` |
+| - | 所有模型请在应用内「设置 → 模型管理」中配置 | - |
 | **向量化** |||
 | `AI_EMBEDDING_PROVIDER` | 提供商 (local/openai) | `local` |
 | `AI_EMBEDDING_MODEL` | Embedding 模型 | `BAAI/bge-small-zh-v1.5` |
