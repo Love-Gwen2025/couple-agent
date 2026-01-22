@@ -188,7 +188,7 @@ export function KnowledgeDetailPage() {
             <div className="grid grid-cols-4 gap-4 p-6">
                 {[
                     { label: '文档总数', value: stats.totalDocs, icon: FileText, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-                    { label: '切片总数', value: stats.totalChunks, icon: Layers, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+                    { label: '切片总数', value: stats.totalChunks, icon: Layers, color: 'text-gray-600 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-800' },
                     { label: '处理完成', value: stats.completed, icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10' },
                     { label: '处理失败', value: stats.failed, icon: XCircle, color: 'text-red-500', bg: 'bg-red-500/10' },
                 ].map((stat, i) => (

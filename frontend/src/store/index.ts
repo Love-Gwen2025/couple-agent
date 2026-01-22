@@ -30,6 +30,9 @@ export {
   useUIStore,
   useTheme,
   useSidebarOpen,
+  useSidebarWidth,
+  useTextScale,
+  initUISettings,
 } from './uiStore';
 
 export {

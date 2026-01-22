@@ -154,7 +154,7 @@ export function ThemePanel({ isOpen, onClose, anchorRect }: ThemePanelProps) {
                                             className={clsx(
                                                 'flex-1 flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl text-[10px] font-bold transition-all uppercase tracking-tighter',
                                                 themeMode === option.value
-                                                    ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/10 text-foreground shadow-lg shadow-purple-500/10 border border-purple-500/30'
+                                                    ? 'bg-gray-100 dark:bg-gray-800 text-foreground border border-gray-200 dark:border-gray-700'
                                                     : 'text-muted hover:text-foreground'
                                             )}
                                             role="switch"
@@ -163,7 +163,7 @@ export function ThemePanel({ isOpen, onClose, anchorRect }: ThemePanelProps) {
                                         >
                                             <div className={clsx(
                                                 'p-1.5 rounded-lg transition-colors',
-                                                themeMode === option.value ? 'bg-purple-500/20 text-purple-400' : 'text-gray-600'
+                                                themeMode === option.value ? 'bg-gray-200 dark:bg-gray-700 text-foreground' : 'text-gray-600'
                                             )}>
                                                 {getThemeModeIcon(option.value)}
                                             </div>

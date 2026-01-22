@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MotionConfig } from 'framer-motion';
-import { useAuthStore, useUIStore } from './store';
+import { useAuthStore, useUIStore, initUISettings } from './store';
 import { MainLayout, LoginPage, WelcomePage } from './components/layout';
 
 /** React Query 客户端 */
@@ -27,9 +27,17 @@ function AppContent() {
   const { token } = useAuthStore();
 
   // UI 状态
-  const { themeMode, accentColor } = useUIStore();
+  const { themeMode, accentColor, themeSkin } = useUIStore();
 
   const [view, setView] = useState<'welcome' | 'login'>('welcome');
+
+  /**
+   * 应用启动时初始化 UI 设置
+   * 将持久化的设置同步到 CSS 变量
+   */
+  useEffect(() => {
+    initUISettings();
+  }, []);
 
   /**
    * 主题初始化效果
@@ -40,6 +48,13 @@ function AppContent() {
 
     // 设置强调色
     root.setAttribute('data-accent', accentColor);
+
+    // 设置主题皮肤
+    if (themeSkin !== 'default') {
+      root.setAttribute('data-theme-skin', themeSkin);
+    } else {
+      root.removeAttribute('data-theme-skin');
+    }
 
     // 设置明暗模式
     if (themeMode === 'system') {
@@ -59,7 +74,7 @@ function AppContent() {
       // 手动设置
       root.setAttribute('data-theme', themeMode);
     }
-  }, [themeMode, accentColor]);
+  }, [themeMode, accentColor, themeSkin]);
 
   // 未登录显示欢迎页或登录页
   if (!token) {

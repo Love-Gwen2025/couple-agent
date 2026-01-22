@@ -131,3 +131,16 @@ export const ACCENT_COLOR_OPTIONS: { value: AccentColor; label: string; color: s
   { value: 'orange', label: '橙色', color: '#f57c00' },
   { value: 'pink', label: '粉色', color: '#e91e63' },
 ];
+
+/** 主题皮肤类型 (与 uiStore 中的 ThemeSkin 保持一致) */
+export type ThemeSkin = 'default' | 'rosepine' | 'rosepine-dawn';
+
+/**
+ * 主题皮肤选项配置
+ * 借鉴 Open WebUI 的主题系统
+ */
+export const THEME_SKIN_OPTIONS: { value: ThemeSkin; label: string; preview: string; description: string }[] = [
+  { value: 'default', label: '默认', preview: '#171717', description: '经典深灰主题' },
+  { value: 'rosepine', label: 'Rose Pine', preview: '#191724', description: '优雅的深色主题' },
+  { value: 'rosepine-dawn', label: 'Rose Pine Dawn', preview: '#faf4ed', description: '温暖的浅色主题' },
+];

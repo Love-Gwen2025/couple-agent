@@ -199,8 +199,8 @@ export function KnowledgePage() {
                                         >
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="p-2 bg-purple-500/10 rounded-lg">
-                                                        <Database className="w-4 h-4 text-purple-500" />
+                                                    <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                                                        <Database className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                                                     </div>
                                                     <span className="font-medium">{kb.name}</span>
                                                 </div>

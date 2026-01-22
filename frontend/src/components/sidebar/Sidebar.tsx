@@ -1,17 +1,80 @@
 /**
- * Gemini Sidebar - Premium Colorful Edition
+ * Open WebUI 风格侧边栏组件
  *
- * 侧边栏组件，显示会话列表和用户信息
+ * 特性：
+ * - 可拖拽调整宽度 (220px - 480px)
+ * - 简洁的灰度样式
+ * - 会话按时间分组（今天/昨天/过去7天/更早）
  */
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Plus, MessageSquare, Trash2, Menu, Settings, Pencil, type LucideIcon } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, useConversationStore, useUIStore } from '../../store';
+import { SIDEBAR_COLLAPSED_WIDTH } from '../../store/uiStore';
 import { getConversations, createConversation, deleteConversation, updateConversationTitle } from '../../api';
 import clsx from 'clsx';
 import { UserProfileModal } from '../settings';
+import type { Conversation } from '../../types';
 
+/**
+ * 时间分组类型
+ */
+type TimeGroup = 'today' | 'yesterday' | 'lastWeek' | 'older';
 
+/**
+ * 分组标签
+ */
+const TIME_GROUP_LABELS: Record<TimeGroup, string> = {
+  today: '今天',
+  yesterday: '昨天',
+  lastWeek: '过去 7 天',
+  older: '更早',
+};
+
+/**
+ * 判断日期属于哪个时间分组
+ */
+function getTimeGroup(dateStr: string): TimeGroup {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const lastWeek = new Date(today);
+  lastWeek.setDate(lastWeek.getDate() - 7);
+
+  if (date >= today) {
+    return 'today';
+  } else if (date >= yesterday) {
+    return 'yesterday';
+  } else if (date >= lastWeek) {
+    return 'lastWeek';
+  }
+  return 'older';
+}
+
+/**
+ * 按时间分组会话
+ */
+function groupConversationsByTime(conversations: Conversation[]): Record<TimeGroup, Conversation[]> {
+  const groups: Record<TimeGroup, Conversation[]> = {
+    today: [],
+    yesterday: [],
+    lastWeek: [],
+    older: [],
+  };
+
+  conversations.forEach((conv) => {
+    const group = getTimeGroup(conv.updatedAt || conv.createdAt || '');
+    groups[group].push(conv);
+  });
+
+  return groups;
+}
+
+/**
+ * 侧边栏项目组件 - Open WebUI 简洁风格
+ */
 function SidebarItem({
   icon: Icon,
   label,
@@ -20,7 +83,6 @@ function SidebarItem({
   onEdit,
   onDelete,
   isCollapsed,
-  colorClass = "text-muted"
 }: {
   icon: LucideIcon;
   label: string;
@@ -29,63 +91,68 @@ function SidebarItem({
   onEdit?: () => void;
   onDelete?: () => void;
   isCollapsed: boolean;
-  colorClass?: string;
 }) {
   return (
-    <motion.div
-      whileHover={{ scale: 1.01, x: 2, backgroundColor: "rgba(255, 255, 255, 0.05)" }}
-      whileTap={{ scale: 0.96 }}
+    <div
       onClick={onClick}
       className={clsx(
-        "flex items-center gap-3 px-4 py-3 rounded-[20px] cursor-pointer transition-all duration-300 group relative",
-        isActive
-          ? "bg-gradient-to-br from-purple-500/15 to-pink-500/5 text-foreground shadow-lg shadow-purple-500/5 border border-purple-500/20"
-          : "text-muted hover:text-foreground hover:bg-surface-highlight/10",
-        isCollapsed ? "justify-center w-12 h-12 px-0 mx-auto" : "w-full"
+        'sidebar-item group relative',
+        isActive && 'active',
+        isCollapsed && 'justify-center !w-10 !h-10 !p-0 mx-auto'
       )}
       title={isCollapsed ? label : undefined}
-      aria-current={isActive ? "page" : undefined}
+      aria-current={isActive ? 'page' : undefined}
     >
-      <Icon className={clsx(
-        "w-5 h-5 flex-shrink-0 transition-all duration-300",
-        isActive ? "text-purple-400 scale-110" : `${colorClass} group-hover:text-purple-400 group-hover:scale-105`
-      )} />
+      <Icon
+        className={clsx(
+          'w-5 h-5 flex-shrink-0 transition-colors',
+          isActive ? 'text-foreground' : 'text-muted group-hover:text-foreground'
+        )}
+      />
 
       {!isCollapsed && (
-        <span className={clsx(
-          "text-sm truncate flex-1 transition-colors duration-300",
-          isActive ? "font-bold text-foreground" : "font-medium"
-        )}>
+        <span
+          className={clsx(
+            'text-sm truncate flex-1 transition-colors',
+            isActive ? 'font-medium text-foreground' : 'text-muted group-hover:text-foreground'
+          )}
+        >
           {label}
         </span>
       )}
 
-      {/* 编辑和删除按钮 */}
+      {/* 编辑和删除按钮 - hover 时显示 */}
       {!isCollapsed && (onEdit || onDelete) && (
-        <div className="opacity-0 group-hover:opacity-100 absolute right-2 flex items-center gap-1 transition-opacity duration-200">
+        <div className="opacity-0 group-hover:opacity-100 absolute right-2 flex items-center gap-0.5 transition-opacity">
           {onEdit && (
             <button
-              onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              className="p-1.5 hover:bg-primary/20 hover:text-primary rounded-full transition-all duration-200"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="btn-icon p-1"
               title="重命名"
               aria-label="重命名会话"
             >
-              <Pencil className="w-4 h-4" />
+              <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
           {onDelete && (
             <button
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="p-1.5 hover:bg-red-500/20 hover:text-red-500 rounded-full transition-all duration-200"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="btn-icon p-1 hover:!bg-red-500/10 hover:!text-red-500"
               title="删除"
               aria-label="删除会话"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 
@@ -95,12 +162,18 @@ export function Sidebar() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  // 滚动容器ref
+  // 滚动容器 ref
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // 侧边栏容器 ref（用于拖拽）
+  const sidebarRef = useRef<HTMLDivElement>(null);
   // 分页状态
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  // 拖拽状态
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
 
   // 认证状态
   const { token, user } = useAuthStore();
@@ -117,7 +190,15 @@ export function Sidebar() {
   } = useConversationStore();
 
   // UI 状态
-  const { sidebarOpen, toggleSidebar } = useUIStore();
+  const { sidebarOpen, sidebarWidth, toggleSidebar, setSidebarWidth } = useUIStore();
+
+  // 按时间分组的会话
+  const groupedConversations = useMemo(() => {
+    return groupConversationsByTime(conversations);
+  }, [conversations]);
+
+  // 计算实际显示宽度
+  const displayWidth = sidebarOpen ? sidebarWidth : SIDEBAR_COLLAPSED_WIDTH;
 
   useEffect(() => {
     if (token) loadConversations();
@@ -130,6 +211,47 @@ export function Sidebar() {
       inputRef.current.select();
     }
   }, [editingId]);
+
+  // 拖拽调整宽度的事件处理
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - resizeStartX.current;
+      const newWidth = resizeStartWidth.current + deltaX;
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, setSidebarWidth]);
+
+  /**
+   * 开始拖拽调整宽度
+   */
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      if (!sidebarOpen) return;
+      e.preventDefault();
+      setIsResizing(true);
+      resizeStartX.current = e.clientX;
+      resizeStartWidth.current = sidebarWidth;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    },
+    [sidebarOpen, sidebarWidth]
+  );
 
   async function loadConversations() {
     try {
@@ -217,155 +339,180 @@ export function Sidebar() {
     setEditingTitle('');
   }
 
+  /**
+   * 渲染会话项
+   */
+  const renderConversationItem = (conv: Conversation) => {
+    if (editingId === conv.id) {
+      // 编辑模式 - 显示输入框
+      return (
+        <div
+          key={conv.id}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-container-high"
+        >
+          <MessageSquare className="w-4 h-4 text-muted flex-shrink-0" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={editingTitle}
+            onChange={(e) => setEditingTitle(e.target.value)}
+            onBlur={handleSaveTitle}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSaveTitle();
+              if (e.key === 'Escape') handleCancelEdit();
+            }}
+            className="flex-1 bg-transparent text-sm outline-none border-b border-primary/50 focus:border-primary py-0.5 text-foreground"
+            placeholder="输入会话标题..."
+          />
+        </div>
+      );
+    }
+
+    // 正常模式 - 显示标题
+    return (
+      <SidebarItem
+        key={conv.id}
+        icon={MessageSquare}
+        label={conv.title || 'Chat'}
+        isActive={conv.id === currentConversationId}
+        onClick={() => setCurrentConversationId(conv.id)}
+        onEdit={() => handleEditConversation(conv.id, conv.title || '')}
+        onDelete={() => handleDeleteConversation(conv.id)}
+        isCollapsed={!sidebarOpen}
+      />
+    );
+  };
 
   return (
     <motion.div
+      ref={sidebarRef}
       initial={false}
-      animate={{ width: sidebarOpen ? 300 : 80 }}
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="glass-premium dual-stroke shadow-premium h-[calc(100vh-24px)] m-3 rounded-[32px] flex flex-col pt-6 pb-6 z-20 flex-shrink-0 overflow-hidden"
+      animate={{ width: displayWidth }}
+      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      className="relative h-screen flex flex-col bg-surface border-r border-border/30 flex-shrink-0 overflow-hidden"
     >
-      {/* Header with Menu */}
-      <div className={clsx("px-6 mb-6 flex items-center", sidebarOpen ? "justify-between" : "justify-center")}>
-        <motion.button
-          whileHover={{ scale: 1.1, rotate: 90 }}
-          whileTap={{ scale: 0.9 }}
+      {/* 拖拽调整宽度的 resizer */}
+      {sidebarOpen && (
+        <div
+          onMouseDown={handleResizeStart}
+          className={clsx(
+            'absolute right-0 top-0 bottom-0 w-1 cursor-col-resize z-50',
+            'hover:bg-primary/30 transition-colors',
+            isResizing && 'bg-primary/50'
+          )}
+        />
+      )}
+
+      {/* Header */}
+      <div className={clsx(
+        'py-3 flex items-center gap-2',
+        sidebarOpen ? 'px-3 justify-between' : 'px-1 justify-center'
+      )}>
+        <button
           onClick={toggleSidebar}
-          className="p-3 bg-white/[0.03] hover:bg-surface-highlight/20 rounded-2xl transition-all text-muted hover:text-purple-400"
-          aria-label={sidebarOpen ? "收起侧边栏" : "展开侧边栏"}
+          className="btn-icon"
+          aria-label={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
           aria-expanded={sidebarOpen}
         >
           <Menu className="w-5 h-5" />
-        </motion.button>
+        </button>
+
+        {sidebarOpen && (
+          <span className="text-sm font-semibold text-foreground">MyAgent</span>
+        )}
+
+        {sidebarOpen && <div className="w-9" />}
       </div>
 
-      {/* ★★★ NEW CHAT BUTTON - Big, Colorful, Obvious ★★★ */}
-      <div className={clsx("px-3 mb-6", sidebarOpen ? "" : "flex justify-center")}>
-        <motion.button
-          whileHover={{ scale: 1.05, boxShadow: "0 0 30px rgba(168, 85, 247, 0.4)" }}
-          whileTap={{ scale: 0.95 }}
+      {/* New Chat Button */}
+      <div className={clsx(sidebarOpen ? 'px-3 mb-4' : 'px-1 mb-3 flex justify-center')}>
+        <button
           onClick={handleCreateConversation}
           className={clsx(
-            "flex items-center justify-center gap-3 cursor-pointer transition-all duration-300",
-            "bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500",
-            "hover:from-purple-700 hover:via-purple-600 hover:to-pink-600",
-            "rounded-2xl text-white font-bold shadow-lg",
-            "border-2 border-border/20",
-            sidebarOpen ? "w-full px-5 py-4" : "w-14 h-14 p-0"
+            'flex items-center justify-center gap-2 transition-colors',
+            'bg-gray-900 dark:bg-white text-white dark:text-gray-900',
+            'hover:bg-gray-800 dark:hover:bg-gray-100',
+            'font-medium rounded-xl',
+            sidebarOpen ? 'w-full px-4 py-2.5' : 'w-10 h-10 p-0'
           )}
           title="New Chat"
         >
-          <Plus className={clsx("transition-transform", sidebarOpen ? "w-5 h-5" : "w-6 h-6")} />
-          {sidebarOpen && <span className="text-base tracking-[0.1em] uppercase italic">New Chat</span>}
-        </motion.button>
+          <Plus className={clsx(sidebarOpen ? 'w-4 h-4' : 'w-5 h-5')} />
+          {sidebarOpen && <span className="text-sm">New Chat</span>}
+        </button>
       </div>
-
-      {/* Recent Section Label */}
-      {sidebarOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="px-6 mb-2 text-xs font-semibold text-transparent bg-gradient-to-r from-primary to-secondary bg-clip-text uppercase tracking-wider"
-        >
-          Recent Chats
-        </motion.div>
-      )}
 
       {/* Conversation List */}
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-2 space-y-1 scrollbar-none"
+        className={clsx('flex-1 overflow-y-auto scrollbar-hidden', sidebarOpen ? 'px-2' : 'px-1')}
       >
-        {conversations.map((conv, index) => (
-          <motion.div
-            key={conv.id}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.03 }}
-          >
-            {editingId === conv.id ? (
-              /* 编辑模式 - 显示输入框 */
-              <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-surface-container-high">
-                <MessageSquare className="w-5 h-5 text-indigo-400 flex-shrink-0" />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={editingTitle}
-                  onChange={(e) => setEditingTitle(e.target.value)}
-                  onBlur={handleSaveTitle}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveTitle();
-                    if (e.key === 'Escape') handleCancelEdit();
-                  }}
-                  className="flex-1 bg-transparent text-sm font-medium outline-none border-b-2 border-primary/50 focus:border-primary py-0.5 text-foreground"
-                  placeholder="输入会话标题..."
-                />
+        <AnimatePresence>
+          {/* 按时间分组渲染会话 */}
+          {(['today', 'yesterday', 'lastWeek', 'older'] as TimeGroup[]).map((group) => {
+            const groupConvs = groupedConversations[group];
+            if (groupConvs.length === 0) return null;
+
+            return (
+              <div key={group} className="mb-2">
+                {/* 分组标签 */}
+                {sidebarOpen && (
+                  <div className="sidebar-time-group">{TIME_GROUP_LABELS[group]}</div>
+                )}
+                {/* 会话列表 */}
+                <div className="space-y-0.5">
+                  {groupConvs.map(renderConversationItem)}
+                </div>
               </div>
-            ) : (
-              /* 正常模式 - 显示标题 */
-              <SidebarItem
-                icon={MessageSquare}
-                label={conv.title || 'Chat'}
-                isActive={conv.id === currentConversationId}
-                onClick={() => setCurrentConversationId(conv.id)}
-                onEdit={() => handleEditConversation(conv.id, conv.title || '')}
-                onDelete={() => handleDeleteConversation(conv.id)}
-                isCollapsed={!sidebarOpen}
-                colorClass="text-purple-400"
-              />
-            )}
-          </motion.div>
-        ))}
+            );
+          })}
+        </AnimatePresence>
+
         {/* 加载更多提示 */}
         {isLoadingMore && (
-          <div className="py-2 text-center text-xs text-muted">加载中...</div>
+          <div className="py-3 text-center text-xs text-muted">加载中...</div>
+        )}
+
+        {/* 空状态 */}
+        {conversations.length === 0 && (
+          <div className="py-8 text-center text-sm text-muted">
+            {sidebarOpen ? '暂无会话' : ''}
+          </div>
         )}
       </div>
 
-      {/* Bottom Section - Settings Only */}
-      <div className="mt-auto px-2 space-y-1 pt-4 border-t border-border/10">
-        {/* Unified Settings Button */}
+      {/* Bottom Section */}
+      <div className={clsx('mt-auto py-3 border-t border-border/30 space-y-1', sidebarOpen ? 'px-2' : 'px-1')}>
+        {/* Settings Button */}
         <SidebarItem
           icon={Settings}
-          label="System Settings"
-          onClick={() => {
-            setIsProfileModalOpen(true);
-          }}
+          label="设置"
+          onClick={() => setIsProfileModalOpen(true)}
           isCollapsed={!sidebarOpen}
-          colorClass="text-purple-400"
         />
 
-        {/* User Profile - Colorful Avatar */}
-        {sidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+        {/* User Profile */}
+        {sidebarOpen && user && (
+          <div
             onClick={() => setIsProfileModalOpen(true)}
-            className="mt-3 mx-2 pt-3 border-t border-border/10 flex items-center gap-3 px-2 py-2 cursor-pointer hover:bg-surface-highlight/20 rounded-2xl transition-all active:scale-95"
+            className="sidebar-item mt-2 cursor-pointer"
           >
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500 via-pink-500 to-purple-800 rounded-full blur-sm opacity-40"></div>
-              <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-pink-500 flex items-center justify-center text-white text-xs font-black shadow-lg overflow-hidden border border-border/20">
-                {user?.avatar ? (
-                  <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
-                ) : (
-                  user?.userName?.charAt(0).toUpperCase()
-                )}
-              </div>
+            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-700 dark:text-gray-200 text-xs font-medium overflow-hidden">
+              {user.avatar ? (
+                <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
+              ) : (
+                user.userName?.charAt(0).toUpperCase()
+              )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-black text-foreground truncate uppercase tracking-tight">{user?.userName}</div>
-              <div className="text-[10px] bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent font-black uppercase tracking-widest">Online</div>
+              <div className="text-sm font-medium text-foreground truncate">{user.userName}</div>
             </div>
-          </motion.div>
+          </div>
         )}
       </div>
 
-      <UserProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-      />
+      <UserProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} />
     </motion.div>
   );
 }

@@ -11,7 +11,7 @@ interface WelcomePageProps {
 
 export function WelcomePage({ onSignIn, onSignUp }: WelcomePageProps) {
   return (
-    <div className="min-h-screen w-full bg-[#000000] relative overflow-hidden font-sans selection:bg-purple-500/30 text-white">
+    <div className="min-h-screen w-full bg-[#000000] relative overflow-hidden font-sans selection:bg-gray-500/30 text-white">
 
       {/* --- 全屏背景层 --- */}
       <div className="absolute inset-0 z-0">
@@ -28,21 +28,21 @@ export function WelcomePage({ onSignIn, onSignUp }: WelcomePageProps) {
       <nav className="relative z-20 w-full max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-2xl font-black tracking-[0.2em] uppercase">
-            MY<span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">AGENT</span>
+            MY<span className="text-white">AGENT</span>
           </span>
         </div>
 
         <div className="hidden md:flex items-center gap-8 text-sm font-bold tracking-widest uppercase text-gray-300">
-          <a href="#" className="hover:text-purple-400 transition-colors">首页</a>
-          <a href="#" className="hover:text-purple-400 transition-colors">新功能</a>
-          <a href="#" className="hover:text-purple-400 transition-colors">代理索引</a>
-          <a href="#" className="hover:text-purple-400 transition-colors">交流区</a>
+          <a href="#" className="hover:text-white transition-colors">首页</a>
+          <a href="#" className="hover:text-white transition-colors">新功能</a>
+          <a href="#" className="hover:text-white transition-colors">代理索引</a>
+          <a href="#" className="hover:text-white transition-colors">交流区</a>
         </div>
 
         <div className="flex items-center gap-4">
           <button
             onClick={onSignIn}
-            className="px-4 py-2 text-sm font-bold tracking-wider hover:text-purple-400 transition-colors"
+            className="px-4 py-2 text-sm font-bold tracking-wider hover:text-white transition-colors"
           >
             登录
           </button>
@@ -60,7 +60,7 @@ export function WelcomePage({ onSignIn, onSignUp }: WelcomePageProps) {
           className="mb-6"
         >
           <h1 className="text-6xl md:text-9xl font-black tracking-tighter uppercase leading-tight">
-            UNLIMITED <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-500 via-purple-400 to-pink-500">AGENTS</span>
+            UNLIMITED <span className="text-white">AGENTS</span>
           </h1>
         </motion.div>
 
@@ -82,7 +82,7 @@ export function WelcomePage({ onSignIn, onSignUp }: WelcomePageProps) {
         >
           <button
             onClick={onSignUp}
-            className="group relative px-12 py-5 bg-gradient-to-r from-purple-600 to-pink-500 rounded-full font-black text-lg shadow-[0_10px_40px_-10px_rgba(168,85,247,0.5)] hover:shadow-[0_15px_60px_-10px_rgba(168,85,247,0.7)] hover:scale-105 active:scale-95 transition-all duration-300"
+            className="group relative px-12 py-5 bg-white text-black rounded-full font-black text-lg hover:bg-gray-100 hover:scale-105 active:scale-95 transition-all duration-300"
           >
             <span className="relative z-10 flex items-center gap-3">
               立即开始

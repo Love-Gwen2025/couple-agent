@@ -177,11 +177,11 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                             className={clsx(
                                                 'w-full flex items-center gap-3 px-5 py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-95',
                                                 activeTab === tab.id
-                                                    ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/5 text-foreground shadow-lg shadow-purple-500/10 border border-purple-500/30'
+                                                    ? 'bg-gray-100 dark:bg-gray-800 text-foreground border border-gray-200 dark:border-gray-700'
                                                     : 'text-muted hover:text-foreground hover:bg-surface-highlight/50'
                                             )}
                                         >
-                                            <tab.icon className={clsx("w-4 h-4", activeTab === tab.id ? "text-purple-400" : "text-muted")} />
+                                            <tab.icon className={clsx("w-4 h-4", activeTab === tab.id ? "text-foreground" : "text-muted")} />
                                             {tab.label}
                                         </button>
                                     ))}
@@ -211,7 +211,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                 <div className="relative group">
                                                     <div
                                                         onClick={handleAvatarClick}
-                                                        className="relative w-24 h-24 rounded-full bg-gradient-to-br from-purple-600 via-pink-500 to-purple-800 flex items-center justify-center text-white text-3xl font-extrabold cursor-pointer border-4 border-surface/50 shadow-2xl overflow-hidden active:scale-95 transition-transform"
+                                                        className="relative w-24 h-24 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-white text-3xl font-extrabold cursor-pointer border-4 border-surface/50 shadow-2xl overflow-hidden active:scale-95 transition-transform"
                                                     >
                                                         {user?.avatar ? (
                                                             <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
@@ -258,7 +258,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                         }}
                                                         className="mt-6 px-8 py-3 rounded-2xl text-sm font-bold bg-surface-highlight/20 text-foreground hover:bg-surface-highlight/30 transition-all active:scale-95 flex items-center gap-2"
                                                     >
-                                                        <Edit2 className="w-4 h-4 text-purple-400" />
+                                                        <Edit2 className="w-4 h-4 text-foreground" />
                                                         EDIT PROFILE
                                                     </button>
                                                 </div>
@@ -270,7 +270,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                             type="text"
                                                             value={editForm.userName}
                                                             onChange={(e) => setEditForm({ ...editForm, userName: e.target.value })}
-                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground font-medium focus:outline-none focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 transition-all placeholder:text-muted/50"
+                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground font-medium focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700 transition-all placeholder:text-muted/50"
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
@@ -280,7 +280,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                             value={editForm.userPhone}
                                                             onChange={(e) => setEditForm({ ...editForm, userPhone: e.target.value })}
                                                             placeholder="Optional"
-                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground font-medium focus:outline-none focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 transition-all placeholder:text-muted/50"
+                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground font-medium focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700 transition-all placeholder:text-muted/50"
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
@@ -290,7 +290,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                             value={editForm.address}
                                                             onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
                                                             placeholder="Optional"
-                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground font-medium focus:outline-none focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 transition-all placeholder:text-muted/50"
+                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground font-medium focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700 transition-all placeholder:text-muted/50"
                                                         />
                                                     </div>
                                                     <div className="flex gap-4 mt-10">
@@ -303,7 +303,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                         <button
                                                             onClick={handleSaveProfile}
                                                             disabled={isLoading}
-                                                            className="flex-1 px-8 py-3.5 rounded-2xl text-sm font-bold bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg shadow-purple-500/20 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                                            className="flex-1 px-8 py-3.5 rounded-2xl text-sm font-bold bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                                         >
                                                             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                                                             SAVE CHANGES
@@ -344,7 +344,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                             type="password"
                                                             value={passwordForm.oldPassword}
                                                             onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
-                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 transition-all"
+                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700 transition-all"
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
@@ -354,7 +354,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                             value={passwordForm.newPassword}
                                                             onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                                                             placeholder="Min 6 characters"
-                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 transition-all placeholder:text-muted/50"
+                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700 transition-all placeholder:text-muted/50"
                                                         />
                                                     </div>
                                                     <div className="space-y-2">
@@ -363,7 +363,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                             type="password"
                                                             value={passwordForm.confirmPassword}
                                                             onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10 transition-all"
+                                                            className="w-full px-5 py-3.5 rounded-2xl bg-surface/40 border border-border/10 text-foreground focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700 transition-all"
                                                         />
                                                     </div>
                                                     <div className="flex gap-4 mt-10">
@@ -380,7 +380,7 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                         <button
                                                             onClick={handleChangePassword}
                                                             disabled={isLoading}
-                                                            className="flex-1 px-8 py-3.5 rounded-2xl text-sm font-bold bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-lg shadow-red-500/20 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                                            className="flex-1 px-8 py-3.5 rounded-2xl text-sm font-bold bg-red-600 hover:bg-red-700 text-white active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                                         >
                                                             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                                                             UPDATE KEY
@@ -408,13 +408,13 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                             className={clsx(
                                                                 'flex flex-col items-center justify-center gap-3 py-6 rounded-[24px] text-[10px] font-black transition-all uppercase tracking-widest',
                                                                 themeMode === option.value
-                                                                    ? 'bg-gradient-to-br from-purple-500/20 to-pink-500/10 text-foreground shadow-xl shadow-purple-500/10 border border-purple-500/30'
+                                                                    ? 'bg-gray-100 dark:bg-gray-800 text-foreground border border-gray-200 dark:border-gray-700'
                                                                     : 'text-muted hover:text-foreground hover:bg-surface-highlight/20'
                                                             )}
                                                         >
                                                             <div className={clsx(
                                                                 'p-3 rounded-2xl transition-all group-hover:scale-110',
-                                                                themeMode === option.value ? 'bg-purple-500/20 text-purple-400 shadow-lg shadow-purple-500/20' : 'bg-surface-highlight/20 text-muted'
+                                                                themeMode === option.value ? 'bg-gray-200 dark:bg-gray-700 text-foreground' : 'bg-surface-highlight/20 text-muted'
                                                             )}>
                                                                 {option.value === 'light' && <Sun className="w-5 h-5" />}
                                                                 {option.value === 'dark' && <Moon className="w-5 h-5" />}
@@ -426,9 +426,9 @@ export function UserProfileModal({ isOpen, onClose }: UserProfileModalProps) {
                                                 </div>
                                             </div>
 
-                                            <div className="p-6 glass-premium dual-stroke rounded-[32px] bg-gradient-to-br from-purple-600/5 to-transparent border-purple-500/10">
+                                            <div className="p-6 rounded-[32px] bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
                                                 <div className="flex gap-4 items-center">
-                                                    <div className="p-3 bg-purple-500/20 rounded-2xl text-purple-400 shadow-xl shadow-purple-500/10 border border-purple-500/20">
+                                                    <div className="p-3 bg-gray-200 dark:bg-gray-700 rounded-2xl text-foreground">
                                                         <Palette className="w-5 h-5" />
                                                     </div>
                                                     <div className="flex-1 space-y-1">

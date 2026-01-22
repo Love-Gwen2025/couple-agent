@@ -143,7 +143,7 @@ export function ModelSettingsPage() {
                         setEditingModel(null);
                         setShowAddModal(true);
                     }}
-                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 active:scale-95 transition-all text-sm uppercase tracking-wide"
+                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100 active:scale-95 transition-all text-sm uppercase tracking-wide"
                 >
                     <Plus className="w-4 h-4" />
                     Connect Model
@@ -154,7 +154,7 @@ export function ModelSettingsPage() {
             <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
                 {loading ? (
                     <div className="h-full flex items-center justify-center">
-                        <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+                        <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
                     </div>
                 ) : (
                     <div className="glass-premium dual-stroke shadow-premium rounded-[32px] overflow-hidden bg-surface/20">
@@ -237,7 +237,7 @@ function ModelRow({
             </td>
             {/* Provider */}
             <td className="px-6 py-5">
-                <span className="px-3 py-1 text-[10px] font-black rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 uppercase tracking-widest">
+                <span className="px-3 py-1 text-[10px] font-black rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 uppercase tracking-widest">
                     {providerLabel}
                 </span>
             </td>

@@ -1,0 +1,122 @@
+/**
+ * Rose Pine 主题配色
+ *
+ * 官方配色参考: https://rosepinetheme.com/palette
+ * 包含 Rose Pine (深色) 和 Rose Pine Dawn (浅色) 两套方案
+ */
+
+/* Rose Pine - 优雅的深色主题 */
+[data-theme-skin="rosepine"] {
+  /* 基础色 */
+  --color-base: 25 23 36;           /* #191724 */
+  --color-surface: 31 29 46;        /* #1f1d2e */
+  --color-overlay: 38 35 58;        /* #26233a */
+
+  /* 文本色 */
+  --color-text: 224 222 244;        /* #e0def4 */
+  --color-subtle: 144 140 170;      /* #908caa */
+  --color-muted: 110 106 134;       /* #6e6a86 */
+
+  /* 强调色 */
+  --color-love: 235 111 146;        /* #eb6f92 - 玫瑰红 */
+  --color-gold: 246 193 119;        /* #f6c177 - 金色 */
+  --color-rose: 234 154 151;        /* #ebbcba - 浅玫瑰 */
+  --color-pine: 49 116 143;         /* #31748f - 松绿 */
+  --color-foam: 156 207 216;        /* #9ccfd8 - 泡沫蓝 */
+  --color-iris: 196 167 231;        /* #c4a7e7 - 鸢尾紫 */
+
+  /* 高亮色 */
+  --color-highlight-low: 33 32 46;   /* #21202e */
+  --color-highlight-med: 64 61 82;   /* #403d52 */
+  --color-highlight-high: 82 79 103; /* #524f67 */
+
+  /* 映射到应用变量 */
+  --background: var(--color-base);
+  --surface: var(--color-surface);
+  --foreground: var(--color-text);
+  --muted: var(--color-muted);
+  --primary: var(--color-iris);
+  --border: var(--color-highlight-med);
+
+  /* 灰度色板覆盖 */
+  --color-gray-50: 38 35 58;
+  --color-gray-100: 38 35 58;
+  --color-gray-200: 64 61 82;
+  --color-gray-300: 82 79 103;
+  --color-gray-400: 110 106 134;
+  --color-gray-500: 144 140 170;
+  --color-gray-600: 144 140 170;
+  --color-gray-700: 64 61 82;
+  --color-gray-800: 38 35 58;
+  --color-gray-850: 31 29 46;
+  --color-gray-900: 31 29 46;
+  --color-gray-950: 25 23 36;
+}
+
+/* Rose Pine Dawn - 温暖的浅色主题 */
+[data-theme-skin="rosepine-dawn"] {
+  /* 基础色 */
+  --color-base: 250 244 237;        /* #faf4ed */
+  --color-surface: 255 250 243;     /* #fffaf3 */
+  --color-overlay: 242 233 222;     /* #f2e9de */
+
+  /* 文本色 */
+  --color-text: 87 82 121;          /* #575279 */
+  --color-subtle: 121 117 147;      /* #797593 */
+  --color-muted: 152 147 165;       /* #9893a5 */
+
+  /* 强调色 */
+  --color-love: 180 99 122;         /* #b4637a - 玫瑰红 */
+  --color-gold: 234 157 52;         /* #ea9d34 - 金色 */
+  --color-rose: 215 130 126;        /* #d7827e - 浅玫瑰 */
+  --color-pine: 40 105 131;         /* #286983 - 松绿 */
+  --color-foam: 86 148 159;         /* #56949f - 泡沫蓝 */
+  --color-iris: 144 122 169;        /* #907aa9 - 鸢尾紫 */
+
+  /* 高亮色 */
+  --color-highlight-low: 242 233 222;  /* #f2e9de */
+  --color-highlight-med: 223 218 217;  /* #dfdad9 */
+  --color-highlight-high: 206 202 205; /* #cecacd */
+
+  /* 映射到应用变量 */
+  --background: var(--color-base);
+  --surface: var(--color-surface);
+  --foreground: var(--color-text);
+  --muted: var(--color-muted);
+  --primary: var(--color-iris);
+  --border: var(--color-highlight-med);
+
+  /* 灰度色板覆盖 */
+  --color-gray-50: 255 250 243;
+  --color-gray-100: 250 244 237;
+  --color-gray-200: 242 233 222;
+  --color-gray-300: 223 218 217;
+  --color-gray-400: 206 202 205;
+  --color-gray-500: 152 147 165;
+  --color-gray-600: 121 117 147;
+  --color-gray-700: 87 82 121;
+  --color-gray-800: 87 82 121;
+  --color-gray-850: 87 82 121;
+  --color-gray-900: 87 82 121;
+  --color-gray-950: 87 82 121;
+}
+
+/* Rose Pine 主题特定样式调整 */
+[data-theme-skin="rosepine"] .sidebar-item:hover,
+[data-theme-skin="rosepine"] .sidebar-item.active {
+  background: rgb(var(--color-highlight-low));
+}
+
+[data-theme-skin="rosepine-dawn"] .sidebar-item:hover,
+[data-theme-skin="rosepine-dawn"] .sidebar-item.active {
+  background: rgb(var(--color-highlight-low));
+}
+
+/* 按钮主色调整 */
+[data-theme-skin="rosepine"] .btn-primary {
+  background: rgb(var(--color-iris));
+}
+
+[data-theme-skin="rosepine-dawn"] .btn-primary {
+  background: rgb(var(--color-iris));
+}

@@ -97,25 +97,25 @@ export function LoginPage({ onBack }: LoginPageProps) {
           className="relative z-10 max-w-md text-center"
         >
           <div className="inline-flex items-center justify-center w-24 h-24 rounded-[32px] bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] mb-10 shadow-2xl relative group">
-            <div className="absolute inset-0 bg-purple-500/20 blur-2xl rounded-full animate-pulse" />
-            <Sparkles className="w-12 h-12 text-purple-400 relative z-10" />
+            <div className="absolute inset-0 bg-gray-500/20 blur-2xl rounded-full animate-pulse" />
+            <Sparkles className="w-12 h-12 text-gray-400 relative z-10" />
           </div>
 
           <h1 className="text-6xl font-black tracking-[0.2em] mb-8 uppercase italic">
-            MY<span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-500 via-purple-400 to-pink-500">AGENT</span>
+            MY<span className="text-white">AGENT</span>
           </h1>
 
           <p className="text-lg text-gray-400 font-bold tracking-[0.3em] uppercase leading-relaxed">
             Unlimited Intelligence
             <br />
-            <span className="text-xs font-mono text-purple-400/60 tracking-[0.5em]">AI Assistant</span>
+            <span className="text-xs font-mono text-gray-400/60 tracking-[0.5em]">AI Assistant</span>
           </p>
         </motion.div>
 
         {/* 底部装饰 */}
-        <div className="absolute bottom-12 left-12 right-12 flex justify-between items-center text-[10px] text-purple-300/20 font-bold tracking-[0.4em] uppercase">
+        <div className="absolute bottom-12 left-12 right-12 flex justify-between items-center text-[10px] text-gray-500/20 font-bold tracking-[0.4em] uppercase">
           <span>SECURE KERNEL</span>
-          <div className="h-px flex-1 mx-6 bg-purple-500/10" />
+          <div className="h-px flex-1 mx-6 bg-gray-500/10" />
           <span>EST. 2025</span>
         </div>
       </div>
@@ -124,8 +124,8 @@ export function LoginPage({ onBack }: LoginPageProps) {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative bg-[#05050A]">
         {/* 移动端背景点缀 */}
         <div className="lg:hidden absolute inset-0 -z-10">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 blur-[80px]" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-pink-500/10 blur-[80px]" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gray-500/10 blur-[80px]" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-gray-500/10 blur-[80px]" />
         </div>
 
         <motion.div
@@ -159,7 +159,7 @@ export function LoginPage({ onBack }: LoginPageProps) {
             <div className="space-y-4">
               {/* 用户名输入 */}
               <div className="group relative">
-                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-500 group-focus-within:text-purple-400 transition-colors">
+                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-500 group-focus-within:text-gray-400 transition-colors">
                   <User className="w-5 h-5" />
                 </div>
                 <input
@@ -170,7 +170,7 @@ export function LoginPage({ onBack }: LoginPageProps) {
                   disabled={isLoading || isSuccess}
                   className={clsx(
                     "w-full pl-12 pr-4 py-4 bg-white/[0.03] border border-white/[0.08] rounded-2xl outline-none transition-all duration-300",
-                    "focus:bg-white/[0.05] focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10",
+                    "focus:bg-white/[0.05] focus:border-gray-500/50 focus:ring-4 focus:ring-gray-500/10",
                     "placeholder:text-gray-600 text-white font-medium"
                   )}
                 />
@@ -178,7 +178,7 @@ export function LoginPage({ onBack }: LoginPageProps) {
 
               {/* 密码输入 */}
               <div className="group relative">
-                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-500 group-focus-within:text-purple-400 transition-colors">
+                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-500 group-focus-within:text-gray-400 transition-colors">
                   <Lock className="w-5 h-5" />
                 </div>
                 <input
@@ -189,7 +189,7 @@ export function LoginPage({ onBack }: LoginPageProps) {
                   disabled={isLoading || isSuccess}
                   className={clsx(
                     "w-full pl-12 pr-4 py-4 bg-white/[0.03] border border-white/[0.08] rounded-2xl outline-none transition-all duration-300",
-                    "focus:bg-white/[0.05] focus:border-purple-500/50 focus:ring-4 focus:ring-purple-500/10",
+                    "focus:bg-white/[0.05] focus:border-gray-500/50 focus:ring-4 focus:ring-gray-500/10",
                     "placeholder:text-gray-600 text-white font-medium"
                   )}
                 />
@@ -201,7 +201,7 @@ export function LoginPage({ onBack }: LoginPageProps) {
               disabled={isLoading || isSuccess}
               className={clsx(
                 "w-full py-5 rounded-2xl font-black text-white transition-all duration-500 relative overflow-hidden group shadow-2xl uppercase tracking-widest",
-                isSuccess ? "bg-green-600" : "bg-gradient-to-r from-purple-600 to-pink-500 hover:scale-[1.02] active:scale-[0.98] shadow-purple-500/20 hover:shadow-purple-500/40",
+                isSuccess ? "bg-green-600" : "bg-gray-900 hover:bg-gray-800 hover:scale-[1.02] active:scale-[0.98]",
                 (isLoading || isSuccess) && "cursor-default"
               )}
             >
