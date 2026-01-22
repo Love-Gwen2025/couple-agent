@@ -2,14 +2,25 @@
 RAG 评估示例脚本（基于 RAGAS）
 
 使用方法：
+    # 使用 OpenAI 兼容 API（默认）
     cd backend
-    uv run python -m scripts.run_rag_eval_v2 --kb-ids 1,2 --sample-size 10
+    uv run python -m scripts.run_rag_eval --kb-ids 1,2 --sample-size 10
+
+    # 使用 Gemini
+    uv run python -m scripts.run_rag_eval --kb-ids 1,2 --provider gemini --model gemini-2.0-flash-exp
+
+    # 使用自定义 API（快速模式，跳过慢速指标）
+    uv run python -m scripts.run_rag_eval --kb-ids 1,2 --provider custom --skip-slow-metrics
 
 完整工作流：
     1. 生成包含 Ground Truth 的评估数据集
     2. 使用 RAGAS 评估 RAG 系统质量
     3. 对比基础方法 vs 高级方法
     4. 输出详细报告
+
+性能优化：
+    --skip-slow-metrics: 跳过 answer_relevancy 指标（需多次模型调用，经常超时）
+                        仅保留 faithfulness 指标，评估速度提升 50%+
 """
 
 import argparse
@@ -19,7 +30,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from langchain_openai import ChatOpenAI
 from loguru import logger
 
 from app.core.db import SessionLocal
@@ -48,7 +58,19 @@ async def main():
     parser.add_argument(
         "--skip-comparison", action="store_true", help="跳过方法对比（仅评估基础方法）"
     )
+    parser.add_argument(
+        "--skip-slow-metrics",
+        action="store_true",
+        help="跳过慢速评估指标（answer_relevancy），加快评估速度",
+    )
     parser.add_argument("--model", type=str, default="gpt-4o-mini", help="用于生成和评估的模型")
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default="openai",
+        choices=["openai", "gemini", "custom"],
+        help="模型提供商: openai(默认)/gemini/custom",
+    )
 
     args = parser.parse_args()
 
@@ -59,16 +81,36 @@ async def main():
     settings = get_settings()
     embedding_service = EmbeddingService(settings)
 
-    # 创建 LLM 模型
-    model = ChatOpenAI(
-        model=args.model,
-        api_key=settings.ai_deepseek_api_key,
-        base_url=settings.ai_deepseek_base_url,
-    )
+    # 创建 LLM 模型（根据 provider 选择）
+    if args.provider == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        model = ChatGoogleGenerativeAI(
+            model=args.model or "gemini-2.0-flash-exp",
+            google_api_key=settings.google_api_key,
+            temperature=0,
+        )
+    elif args.provider == "custom":
+        from app.services.custom_model_adapter import CustomChatModel
+
+        model = CustomChatModel(
+            api_key=settings.custom_api_key,
+            base_url=settings.custom_base_url,
+            model=args.model or "gpt-5.1-codex-max",
+            temperature=0,
+        )
+    else:  # openai (默认)
+        from langchain_openai import ChatOpenAI
+
+        model = ChatOpenAI(
+            model=args.model,
+            api_key=settings.ai_deepseek_api_key,
+            base_url=settings.ai_deepseek_base_url,
+        )
 
     logger.info("🚀开始RAG评估流程")
     logger.info(f"📚 知识库 ID: {kb_ids}")
-    logger.info(f"🤖 使用模型: {args.model}")
+    logger.info(f"🤖 使用模型: {args.model} (提供商: {args.provider})")
 
     # ========== 步骤 1: 生成或加载数据集 ==========
     if args.dataset_file:
@@ -120,8 +162,13 @@ async def main():
         if args.skip_comparison:
             # 仅评估基础方法
             logger.info("🔍 评估基础检索方法（混合检索）")
+            if args.skip_slow_metrics:
+                logger.info("⚡ 已启用快速模式（跳过 answer_relevancy 指标）")
             report = await evaluator.evaluate_batch(
-                db=db, test_cases=test_cases, use_advanced=False
+                db=db,
+                test_cases=test_cases,
+                use_advanced=False,
+                skip_slow_metrics=args.skip_slow_metrics,
             )
 
             # 打印报告
@@ -136,7 +183,11 @@ async def main():
         else:
             # 对比基础 vs 高级方法
             logger.info("📈 对比基础方法 vs 高级方法")
-            comparison = await evaluator.compare_methods(db=db, test_cases=test_cases)
+            if args.skip_slow_metrics:
+                logger.info("⚡ 已启用快速模式（跳过 answer_relevancy 指标）")
+            comparison = await evaluator.compare_methods(
+                db=db, test_cases=test_cases, skip_slow_metrics=args.skip_slow_metrics
+            )
 
             # 打印对比结果
             print_comparison(comparison)

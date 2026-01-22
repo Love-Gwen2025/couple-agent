@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """测试中转站 API 集成 - 输出到文件"""
 
 import asyncio
@@ -7,15 +6,18 @@ import sys
 sys.path.insert(0, ".")
 
 from langchain_core.messages import HumanMessage, SystemMessage
+
+from app.core.settings import get_settings
 from app.services.custom_model_adapter import CustomChatModel
 
 results = []
 
 
 async def test_custom_model():
+    settings = get_settings()
     model = CustomChatModel(
-        api_key="cr_f80e1d29b593d7f6fbae575679f3a32cdaf25f38c95b08b4d4c2b911c5d23229",
-        base_url="https://ai.love-gwen.top/openai",
+        api_key=settings.custom_api_key,
+        base_url=settings.custom_base_url,
         model="gpt-5.1-codex-max",
         temperature=0.7,
     )

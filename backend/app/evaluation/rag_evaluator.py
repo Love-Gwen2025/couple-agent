@@ -45,6 +45,9 @@ class RAGPipelineMetrics:
     num_retrieved: int
     retrieval_latency_ms: float
     avg_similarity: float
+    # 生成结果
+    generated_answer: str | None = None  # 生成的答案
+    retrieved_contexts: list[str] = field(default_factory=list)  # 检索到的上下文
     # RAGAS 标准指标
     faithfulness_score: float | None = None  # 忠实度（0-1）
     answer_relevancy_score: float | None = None  # 答案相关性（0-1）
@@ -109,6 +112,7 @@ class RAGEvaluator:
         use_advanced: bool = False,
         ground_truth_answer: str | None = None,
         ground_truth_contexts: list[str] | None = None,
+        skip_slow_metrics: bool = False,
     ) -> RAGPipelineMetrics:
         """
         评估完整的 RAG 流程（检索 + 生成）
@@ -202,6 +206,7 @@ class RAGEvaluator:
             answer=generated_answer,
             ground_truth_answer=ground_truth_answer,
             ground_truth_contexts=ground_truth_contexts,
+            skip_slow_metrics=skip_slow_metrics,
         )
 
         total_latency = (time.time() - total_start) * 1000
@@ -211,6 +216,8 @@ class RAGEvaluator:
             num_retrieved=len(results),
             retrieval_latency_ms=retrieval_latency,
             avg_similarity=avg_similarity,
+            generated_answer=generated_answer,
+            retrieved_contexts=retrieved_contexts,
             faithfulness_score=ragas_metrics.get("faithfulness"),
             answer_relevancy_score=ragas_metrics.get("answer_relevancy"),
             context_precision_score=ragas_metrics.get("context_precision"),
@@ -226,6 +233,7 @@ class RAGEvaluator:
         answer: str,
         ground_truth_answer: str | None = None,
         ground_truth_contexts: list[str] | None = None,
+        skip_slow_metrics: bool = False,
     ) -> dict[str, float]:
         """
         使用 RAGAS 框架评估 RAG 质量
@@ -236,6 +244,7 @@ class RAGEvaluator:
             answer: 生成的答案
             ground_truth_answer: 标准答案（可选）
             ground_truth_contexts: 标准上下文（可选）
+            skip_slow_metrics: 跳过慢速指标（answer_relevancy，会超时）
 
         Returns:
             RAGAS 评估指标字典
@@ -250,9 +259,12 @@ class RAGEvaluator:
         # 根据是否有 Ground Truth 选择指标
         # 注意：context_precision 和 context_recall 需要 reference（ground_truth）
         metrics = [
-            faithfulness,  # 忠实度（生成内容是否忠于上下文）
-            answer_relevancy,  # 答案相关性（答案是否回答问题）
+            faithfulness,  # 忠实度（生成内容是否忠于上下文）- 快速
         ]
+
+        # answer_relevancy 需要多次模型调用，经常超时，默认跳过
+        if not skip_slow_metrics:
+            metrics.append(answer_relevancy)  # 答案相关性（答案是否回答问题）- 慢速
 
         # 如果有 Ground Truth，添加需要 reference 的指标
         if ground_truth_contexts:
@@ -318,6 +330,7 @@ class RAGEvaluator:
         db: AsyncSession,
         test_cases: list[dict],
         use_advanced: bool = False,
+        skip_slow_metrics: bool = False,
     ) -> BatchEvaluationReport:
         """
         批量评估多个测试用例
@@ -330,6 +343,7 @@ class RAGEvaluator:
                 - ground_truth_answer: 标准答案（可选）
                 - ground_truth_contexts: 标准上下文（可选）
             use_advanced: 是否使用高级检索
+            skip_slow_metrics: 跳过慢速评估指标
 
         Returns:
             批量评估报告
@@ -349,6 +363,7 @@ class RAGEvaluator:
                 use_advanced=use_advanced,
                 ground_truth_answer=case.get("ground_truth_answer"),
                 ground_truth_contexts=case.get("ground_truth_contexts"),
+                skip_slow_metrics=skip_slow_metrics,
             )
 
             report.metrics_list.append(metrics)
@@ -406,6 +421,7 @@ class RAGEvaluator:
         self,
         db: AsyncSession,
         test_cases: list[dict],
+        skip_slow_metrics: bool = False,
     ) -> dict[str, Any]:
         """
         对比基础检索 vs 高级检索的效果
@@ -413,15 +429,20 @@ class RAGEvaluator:
         Args:
             db: 数据库会话
             test_cases: 测试用例列表
+            skip_slow_metrics: 跳过慢速评估指标
 
         Returns:
             对比结果
         """
         logger.info("📊 Evaluating baseline (hybrid search)...")
-        baseline = await self.evaluate_batch(db=db, test_cases=test_cases, use_advanced=False)
+        baseline = await self.evaluate_batch(
+            db=db, test_cases=test_cases, use_advanced=False, skip_slow_metrics=skip_slow_metrics
+        )
 
         logger.info("📊 Evaluating advanced (query rewrite + rerank)...")
-        advanced = await self.evaluate_batch(db=db, test_cases=test_cases, use_advanced=True)
+        advanced = await self.evaluate_batch(
+            db=db, test_cases=test_cases, use_advanced=True, skip_slow_metrics=skip_slow_metrics
+        )
 
         comparison = {
             "baseline": {

@@ -91,6 +91,15 @@ class Settings(BaseSettings):
     # ==================== Tavily 搜索 ====================
     tavily_api_key: str | None = Field(default=None, description="API Key")
 
+    # ==================== Google Gemini API ====================
+    google_api_key: str | None = Field(default=None, description="Google API Key")
+
+    # ==================== Custom Model API ====================
+    custom_api_key: str | None = Field(default=None, description="Custom API Key")
+    custom_base_url: str | None = Field(
+        default="https://ai.love-gwen.top/openai", description="Custom Base URL"
+    )
+
     # ==================== DeepSearch 深度搜索 ====================
     deep_search_max_rounds: int = Field(default=5, description="最大规划轮次")
     deep_search_model: str | None = Field(
