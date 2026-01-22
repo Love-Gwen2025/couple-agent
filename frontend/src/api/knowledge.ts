@@ -63,6 +63,17 @@ export async function getKnowledgeBases(
 }
 
 /**
+ * 获取知识库列表（不分页）
+ */
+export async function getAllKnowledgeBases(): Promise<KnowledgeBase[]> {
+    /*
+     获取后端返回的知识库列表，保持接口返回为空时的兼容。
+    */
+    const response = await apiClient.get<ApiResponse<KnowledgeBase[]>>('/knowledge-bases/all');
+    return response.data.data || [];
+}
+
+/**
  * 获取单个知识库详情
  */
 export async function getKnowledgeBase(id: string): Promise<KnowledgeBase> {

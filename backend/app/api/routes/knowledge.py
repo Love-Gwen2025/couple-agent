@@ -124,6 +124,22 @@ async def list_knowledge_bases(
     )
 
 
+@router.get("/all", response_model=ApiResult[list[KnowledgeBaseVo]])
+async def list_all_knowledge_bases(
+    db: AsyncSession = Depends(get_db_session),
+    current: CurrentUser = Depends(get_current_user),
+) -> ApiResult[list[KnowledgeBaseVo]]:
+    """
+    列出用户的全部知识库（不分页）
+    """
+    # 1. 使用服务层读取用户可访问的全部知识库。
+    service = KnowledgeService(db)
+    kbs = await service.list_all_knowledge_bases(current.id)
+    # 2. 将实体转换为视图对象，保持返回结构一致。
+    records = [KnowledgeBaseVo(**kb.to_vo()) for kb in kbs]
+    return ApiResult.ok(records)
+
+
 @router.get("/{kb_id}", response_model=ApiResult[KnowledgeBaseVo])
 async def get_knowledge_base(
     kb_id: str,

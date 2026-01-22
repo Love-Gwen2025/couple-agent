@@ -222,11 +222,20 @@ export function ChatPanel() {
 
   // 发送消息
   const handleSend = useCallback(
-    (content: string, mode?: string) => {
+    (content: string, mode?: string, knowledgeBaseIds?: string[]) => {
       if (!currentConversationId || !user) return;
 
+      /*
+       1. 获取当前会话的父消息，用于构建消息树关系。
+       2. 统一处理知识库选择为空的场景，避免触发检索。
+      */
       const lastMessage = displayMessages.length > 0 ? displayMessages[displayMessages.length - 1] : null;
       const parentMessageId = lastMessage ? String(lastMessage.id) : undefined;
+
+      const normalizedKnowledgeBaseIds =
+        Array.isArray(knowledgeBaseIds) && knowledgeBaseIds.length > 0
+          ? knowledgeBaseIds
+          : undefined;
 
       // 乐观更新：立即显示用户消息
       const tempId = `temp-${Date.now()}`;
@@ -252,6 +261,7 @@ export function ChatPanel() {
         modelId: currentModelId || undefined,
         parentMessageId,
         mode: mode || 'chat',
+        knowledgeBaseIds: normalizedKnowledgeBaseIds,
       });
     },
     [

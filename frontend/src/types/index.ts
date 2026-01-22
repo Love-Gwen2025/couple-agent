@@ -158,6 +158,8 @@ export interface StreamChatRequest {
   regenerate?: boolean;
   /** 对话模式: chat/deep_search */
   mode?: string;
+  /** 启用的知识库 ID 列表，用于 RAG 检索 */
+  knowledgeBaseIds?: string[];
 }
 
 /** 流式聊天事件 */

@@ -95,6 +95,25 @@ class KnowledgeService:
         )
         return list(result.scalars().all()), total
 
+    async def list_all_knowledge_bases(self, user_id: int) -> list[KnowledgeBase]:
+        """
+        列出用户的全部知识库（不分页）
+
+        Args:
+            user_id: 用户 ID
+
+        Returns:
+            知识库列表
+        """
+        # 1. 按用户 ID 查询全部知识库，保持更新时间倒序。
+        result = await self.db.execute(
+            select(KnowledgeBase)
+            .where(KnowledgeBase.user_id == user_id)
+            .order_by(KnowledgeBase.update_time.desc())
+        )
+        # 2. 统一转为列表返回，便于调用方直接序列化。
+        return list(result.scalars().all())
+
     async def get_knowledge_base(
         self,
         kb_id: int,
