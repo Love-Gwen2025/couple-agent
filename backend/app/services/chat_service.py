@@ -290,7 +290,7 @@ class ChatService:
         # 用于在 checkpointer 上下文外访问的变量
         latest_checkpoint_id = None
 
-        # 动态获取模型（根据 model_id 选择用户模型或系统默认模型）
+        # 动态获取模型
         model = await self._get_model_for_user(user_id, model_id, db)
 
         if model:

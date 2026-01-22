@@ -91,6 +91,3 @@ async def create_checkpointer(settings: Settings) -> AsyncIterator[AsyncPostgres
     async with _pool.connection() as conn:
         yield AsyncPostgresSaver(conn)
 
-
-# 兼容旧代码
-create_redis_checkpointer = create_checkpointer

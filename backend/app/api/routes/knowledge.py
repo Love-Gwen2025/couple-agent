@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_db_session
 from app.core.settings import get_settings
 from app.dependencies.auth import CurrentUser, get_current_user
-from app.schema.base import ApiResult, PageParams, PageResponse
+from app.schema.base import ApiResult, PageParams, PageResponse, SnowflakeId
 from app.services.embedding_service import EmbeddingService
 from app.services.knowledge_service import KnowledgeService
 from app.tasks.document_tasks import process_document_task
@@ -37,7 +37,7 @@ class CreateKnowledgeBaseParam(BaseModel):
 class KnowledgeBaseVo(BaseModel):
     """知识库视图"""
 
-    id: str
+    id: SnowflakeId  # 使用 SnowflakeId 自动序列化为字符串
     name: str
     description: str | None
     documentCount: int
@@ -49,7 +49,7 @@ class KnowledgeBaseVo(BaseModel):
 class DocumentVo(BaseModel):
     """文档视图"""
 
-    id: str
+    id: SnowflakeId  # 使用 SnowflakeId 自动序列化为字符串
     fileName: str
     fileUrl: str
     fileSize: int | None

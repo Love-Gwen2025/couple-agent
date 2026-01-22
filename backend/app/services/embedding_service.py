@@ -392,3 +392,112 @@ class EmbeddingService:
         )
 
         return final_results
+
+    # ========== RAG 深度优化方法 ==========
+
+    async def advanced_search_knowledge_base(
+        self,
+        db: AsyncSession,
+        query: str,
+        knowledge_base_ids: list[int],
+        top_k: int = 5,
+        similarity_threshold: float = 0.5,
+        enable_query_rewrite: bool = True,
+        enable_rerank: bool = True,
+        enable_compression: bool = False,
+        model=None,
+    ) -> list[dict[str, Any]]:
+        """
+        高级知识库检索（RAG 优化版）
+
+        完整优化链路：
+        1. Query Rewriting - 查询改写扩展
+        2. Hybrid Search - 混合检索（向量 + BM25 + RRF）
+        3. Rerank - Cross-Encoder 重排序
+        4. Context Compression - 上下文压缩（可选）
+
+        Args:
+            db: 数据库会话
+            query: 用户查询
+            knowledge_base_ids: 知识库 ID 列表
+            top_k: 最终返回结果数量
+            similarity_threshold: 相似度阈值
+            enable_query_rewrite: 是否启用查询改写
+            enable_rerank: 是否启用重排序
+            enable_compression: 是否启用上下文压缩
+            model: LLM 模型（用于改写和压缩）
+
+        Returns:
+            优化后的检索结果列表
+        """
+        from app.services.query_rewrite_service import QueryRewriteService
+        from app.services.rerank_service import RerankService, RerankStrategy
+
+        logger.info(
+            f"🚀 Advanced RAG search: query='{query[:30]}...', "
+            f"rewrite={enable_query_rewrite}, rerank={enable_rerank}, compress={enable_compression}"
+        )
+
+        # 1. Query Rewriting（查询改写）
+        queries = [query]
+        if enable_query_rewrite and model:
+            rewrite_service = QueryRewriteService(model=model)
+            queries = await rewrite_service.rewrite_query(query)
+
+        # 2. 对所有查询变体执行混合检索
+        all_results = []
+        seen_keys = set()
+
+        for q in queries:
+            results = await self.hybrid_search_knowledge_base(
+                db=db,
+                query=q,
+                knowledge_base_ids=knowledge_base_ids,
+                top_k=top_k * 2,  # 多取一些用于后续筛选
+                similarity_threshold=similarity_threshold,
+                mode="union",
+            )
+            # 去重合并
+            for r in results:
+                key = f"{r.get('document_id', '')}_{r.get('chunk_index', '')}"
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_results.append(r)
+
+        logger.info(f"📊 After query expansion: {len(all_results)} unique results")
+
+        if not all_results:
+            return []
+
+        # 3. Rerank（重排序）
+        if enable_rerank:
+            try:
+                rerank_service = RerankService(strategy=RerankStrategy.CROSS_ENCODER)
+                all_results = await rerank_service.rerank(
+                    query=query,
+                    results=all_results,
+                    top_k=top_k * 2 if enable_compression else top_k,
+                )
+            except Exception as e:
+                logger.warning(f"Rerank failed, falling back to original order: {e}")
+                all_results = all_results[:top_k]
+
+        # 4. Context Compression（上下文压缩）- 可选
+        if enable_compression and model:
+            try:
+                from app.services.context_compression_service import ContextCompressionService
+
+                compression_service = ContextCompressionService(model=model)
+                all_results = await compression_service.compress_chunks(
+                    question=query,
+                    chunks=all_results,
+                    content_key="content",
+                )
+            except Exception as e:
+                logger.warning(f"Compression failed: {e}")
+
+        final_results = all_results[:top_k]
+
+        logger.info(f"✅ Advanced RAG search complete: {len(final_results)} final results")
+
+        return final_results

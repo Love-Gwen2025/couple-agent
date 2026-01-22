@@ -9,19 +9,26 @@ Chat Mode 的并行检索层，负责：
 """
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+# 类型检查时导入（避免循环依赖）
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.services.embedding_service import EmbeddingService
 
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from loguru import logger
 
+from app.schema.search import SearchStrategy
 from app.utils.content import extract_text_content
 
 
 async def get_history_context(
     query: str,
-    embedding_service,
-    db_session,
+    embedding_service: "EmbeddingService",
+    db_session: "AsyncSession",
     conversation_id: int | None,
     top_k: int = 5,
     similarity_threshold: float = 0.6,
@@ -71,12 +78,13 @@ async def get_history_context(
 
 async def get_kb_context(
     query: str,
-    embedding_service,
-    db_session,
+    embedding_service: "EmbeddingService",
+    db_session: "AsyncSession",
     knowledge_base_ids: list[int],
     top_k: int = 5,
     similarity_threshold: float = 0.5,
-    use_hybrid: bool = True,
+    strategy: SearchStrategy = SearchStrategy.HYBRID,
+    model=None,
 ) -> str:
     """
     获取知识库上下文
@@ -88,7 +96,8 @@ async def get_kb_context(
         knowledge_base_ids: 知识库 ID 列表
         top_k: 返回结果数量
         similarity_threshold: 相似度阈值
-        use_hybrid: 是否使用混合检索（向量 + BM25）
+        strategy: 搜索策略（BASIC/HYBRID/ADVANCED）
+        model: LLM 模型（ADVANCED 策略需要）
 
     Returns:
         格式化的知识库上下文字符串
@@ -97,8 +106,18 @@ async def get_kb_context(
         return ""
 
     try:
-        if use_hybrid:
-            results = await embedding_service.hybrid_search_knowledge_base(
+        # 策略方法映射
+        async def basic_search():
+            return await embedding_service.search_knowledge_base(
+                db=db_session,
+                query=query,
+                knowledge_base_ids=knowledge_base_ids,
+                top_k=top_k,
+                similarity_threshold=similarity_threshold,
+            )
+
+        async def hybrid_search():
+            return await embedding_service.hybrid_search_knowledge_base(
                 db=db_session,
                 query=query,
                 knowledge_base_ids=knowledge_base_ids,
@@ -106,14 +125,30 @@ async def get_kb_context(
                 similarity_threshold=similarity_threshold,
                 mode="union",
             )
-        else:
-            results = await embedding_service.search_knowledge_base(
+
+        async def advanced_search():
+            logger.info("🚀 Using Advanced RAG for KB search")
+            return await embedding_service.advanced_search_knowledge_base(
                 db=db_session,
                 query=query,
                 knowledge_base_ids=knowledge_base_ids,
                 top_k=top_k,
                 similarity_threshold=similarity_threshold,
+                enable_query_rewrite=True,
+                enable_rerank=True,
+                enable_compression=False,
+                model=model,
             )
+
+        # 策略映射表
+        strategy_map = {
+            SearchStrategy.BASIC: basic_search,
+            SearchStrategy.HYBRID: hybrid_search,
+            SearchStrategy.ADVANCED: advanced_search,
+        }
+
+        # 执行选定策略
+        results = await strategy_map[strategy]()
 
         if not results:
             return ""
@@ -123,8 +158,10 @@ async def get_kb_context(
         for i, chunk in enumerate(results, 1):
             source = chunk.get("file_name", "未知来源")
             content = chunk["content"]
-            similarity = chunk.get("similarity", 0)
-            formatted.append(f"{i}. [{source}] (相似度: {similarity:.2f})\n{content}")
+            # 优先使用 rerank_score，其次是 similarity
+            score = chunk.get("rerank_score", chunk.get("similarity", 0))
+            score_label = "相关度" if "rerank_score" not in chunk else "精排分"
+            formatted.append(f"{i}. [{source}] ({score_label}: {score:.2f})\n{content}")
 
         logger.info(f"📚 KB context: found {len(results)} relevant chunks")
         return "【知识库参考资料】\n" + "\n\n".join(formatted)
@@ -203,7 +240,7 @@ def create_context_node(settings):
             knowledge_base_ids=knowledge_base_ids,
             top_k=settings.rag_top_k,
             similarity_threshold=settings.rag_similarity_threshold,
-            use_hybrid=True,
+            strategy=SearchStrategy.HYBRID,
         )
 
         # 并行等待结果

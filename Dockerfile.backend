@@ -2,6 +2,12 @@
 # Python Backend Dockerfile
 # 使用 uv 作为包管理器的多阶段构建
 # ============================================
+# 缓存优化策略：
+# 1. 先复制依赖文件 (pyproject.toml, uv.lock)
+# 2. 安装依赖（此层会被缓存，除非依赖文件改变）
+# 3. 替换为 CPU 版本的 PyTorch（节省 1 GB CUDA 库）
+# 4. 最后复制代码（代码改变不影响依赖缓存）
+# ============================================
 
 # ---------- 构建阶段 ----------
 FROM python:3.12-slim AS builder
@@ -11,33 +17,56 @@ RUN pip install uv --quiet
 
 WORKDIR /app
 
-# 复制依赖文件
+# ==================== 步骤 1: 复制依赖文件（缓存关键点）====================
+# 只有当这些文件改变时，才会触发后续的依赖安装
 COPY backend/pyproject.toml backend/uv.lock* ./
 
-# 安装依赖到虚拟环境（不包含 dev 依赖）
+# ==================== 步骤 2: 安装基础依赖（不包含 torch）====================
 # 增加超时时间，避免下载大型包（如 numpy）时超时
 ENV UV_HTTP_TIMEOUT=120
-RUN uv sync --frozen --no-dev --no-install-project
+
+# 安装除 torch 依赖包之外的所有依赖
+# sentence-transformers 和 ragas 已从 pyproject.toml 中注释，将在后面手动安装
+RUN uv sync --frozen --no-dev --no-install-project \
+    && echo "✅ Base dependencies installed (without torch-related packages)"
+
+# ==================== 步骤 3: 安装 CPU 版本的 PyTorch ====================
+# 从 PyTorch 官方 CPU 索引安装，避免下载 CUDA 库（节省 2.8 GB）
+# 参考：https://docs.astral.sh/uv/guides/integration/pytorch/
+# 重要：只使用 --index-url，不要加 --extra-index-url，否则会从 PyPI 下载 CUDA 版本
+RUN uv pip install --no-cache \
+    --index-url https://download.pytorch.org/whl/cpu \
+    torch \
+    && echo "✅ PyTorch CPU version installed (saved ~2.8 GB CUDA libraries)"
+
+# ==================== 步骤 4: 安装依赖 torch 的 ML 包 ====================
+# 安装 sentence-transformers (Rerank) 和 ragas (评估框架)
+# 这些包会检测到已安装的 CPU 版 torch，不会重新下载
+# 从 PyPI 安装这些包（它们不在 PyTorch 索引中）
+RUN uv pip install --no-cache \
+    "sentence-transformers>=3.0.0" "ragas>=0.2.0" \
+    && echo "✅ ML packages installed (sentence-transformers, ragas)"
 
 # ---------- 运行阶段 ----------
 FROM python:3.12-slim AS runner
 
 WORKDIR /app
 
-# 复制虚拟环境
+# ==================== 步骤 4: 复制构建产物（虚拟环境）====================
+# 从 builder 阶段复制已安装好的虚拟环境
 COPY --from=builder /app/.venv /app/.venv
 
 # 设置环境变量（需要先设置PATH以便后续使用python）
 ENV PATH="/app/.venv/bin:$PATH"
 
-# ==================== 预下载嵌入模型 ====================
-# 使用 HuggingFace 国内镜像加速下载
+# ==================== 步骤 5: 预下载嵌入模型（可选优化）====================
 # 模型会缓存在 /root/.cache/fastembed，构建后直接打包进镜像
-ENV HF_ENDPOINT=https://hf-mirror.com
+# 注意：需要配置 Docker 代理才能访问 HuggingFace
 RUN python -c "from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-zh-v1.5')" \
     && echo "✅ Embedding model pre-downloaded successfully"
 
-# 复制应用代码
+# ==================== 步骤 6: 复制应用代码（最后执行，确保前面都能缓存）====================
+# 代码改变频繁，所以放在最后，不影响前面的缓存层
 COPY backend/app ./app
 COPY backend/migrations ./migrations
 # 禁用 Python 输出缓冲，便于查看日志
