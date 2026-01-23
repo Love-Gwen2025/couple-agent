@@ -1,0 +1,15 @@
+# Pre-commit 配置文件
+# 用于在提交前自动检测敏感信息泄露
+# 文档: https://pre-commit.com/
+
+repos:
+  # Gitleaks - 敏感信息泄露检测工具
+  # 会自动扫描代码中的 API Keys、密码、tokens 等敏感信息
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2  # 使用最新稳定版本
+    hooks:
+      - id: gitleaks
+        name: 🔐 检测敏感信息泄露 (gitleaks)
+        description: 扫描代码中的 API Key、密码、Token 等敏感信息
+        # 仅检测即将提交的文件，不扫描整个历史
+        args: ['--verbose']
