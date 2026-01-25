@@ -31,7 +31,12 @@ async def create_assistant_conversation(
     创建机器人会话，标题缺省时使用默认文案。
     """
     service = ConversationService(db)
-    conv_id = await service.create_conversation(current.id, payload.title, payload.modelCode)
+    conv_id = await service.create_conversation(
+        current.id,
+        payload.title,
+        payload.modelCode,
+        int(payload.agentId) if payload.agentId else None,
+    )
     conversation = await service.get_conversation(conv_id, current.id)
     return ApiResult.ok(ConversationConverter.to_vo(conversation))
 

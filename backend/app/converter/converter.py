@@ -28,6 +28,7 @@ class ConversationConverter:
             title=model.title,
             userId=model.user_id,  # SnowflakeId 自动序列化
             modelCode=model.model_code,
+            agentId=model.agent_id,
             lastMessageId=model.last_message_id,  # SnowflakeId | None 自动处理
             lastMessageAt=model.last_message_at.isoformat() if model.last_message_at else None,
             avatar=model.avatar,

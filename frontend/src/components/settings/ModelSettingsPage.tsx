@@ -6,7 +6,7 @@
  * 2. 支持启用/停用、编辑操作
  * 3. 针对不同提供商显示差异化配置表单
  */
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Plus, Edit2, Trash2, Loader2, CheckCircle, XCircle, TestTube, Power, PowerOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
@@ -67,17 +67,19 @@ export function ModelSettingsPage() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingModel, setEditingModel] = useState<UserModel | null>(null);
 
+    async function loadModels() {
+        try {
+            const data = await getUserModels();
+            setModels(data);
+        } finally {
+            setLoading(false);
+        }
+    }
+
     // 加载模型列表
     useEffect(() => {
-        loadModels();
+        void loadModels();
     }, []);
-
-    async function loadModels() {
-        setLoading(true);
-        const data = await getUserModels();
-        setModels(data);
-        setLoading(false);
-    }
 
     // 切换模型状态 (启用/停用)
     async function handleToggleStatus(model: UserModel) {
@@ -114,6 +116,7 @@ export function ModelSettingsPage() {
 
     // 保存 (新增或修改)
     async function handleSave(data: UserModelPayload) {
+        setLoading(true);
         if (editingModel) {
             await updateUserModel(editingModel.id, data);
         } else {

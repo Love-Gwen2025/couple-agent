@@ -8,7 +8,9 @@ import { ChatPanel } from '../chat';
 import { useNavigationStore } from '../../store';
 import { KnowledgePage, KnowledgeDetailPage } from '../knowledge';
 import { ModelSettingsPage } from '../settings';
-import { Database, Bot } from 'lucide-react';
+import { AgentsPage } from '../agents';
+import { ToolsPage } from '../tools';
+import { Bot, Database, Users, Wrench } from 'lucide-react';
 
 /**
  * 主布局组件
@@ -36,11 +38,27 @@ export function MainLayout() {
         {currentPage === 'knowledge' && <KnowledgePage />}
         {currentPage === 'knowledge-detail' && <KnowledgeDetailPage />}
         {currentPage === 'model-settings' && <ModelSettingsPage />}
+        {currentPage === 'agents' && <AgentsPage />}
+        {currentPage === 'tools' && <ToolsPage />}
       </main>
 
       {/* Top Right Navigation - Only visible in Chat view to switch to others */}
       {currentPage === 'chat' && (
         <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+          <button
+            onClick={() => setCurrentPage('agents')}
+            className="p-2.5 rounded-xl bg-surface-container-high/50 hover:bg-surface-container-high border border-border/10 text-muted hover:text-foreground transition-all backdrop-blur-md"
+            title="Agents"
+          >
+            <Users className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setCurrentPage('tools')}
+            className="p-2.5 rounded-xl bg-surface-container-high/50 hover:bg-surface-container-high border border-border/10 text-muted hover:text-foreground transition-all backdrop-blur-md"
+            title="Tools"
+          >
+            <Wrench className="w-5 h-5" />
+          </button>
           <button
             onClick={() => setCurrentPage('knowledge')}
             className="p-2.5 rounded-xl bg-surface-container-high/50 hover:bg-surface-container-high border border-border/10 text-muted hover:text-foreground transition-all backdrop-blur-md"

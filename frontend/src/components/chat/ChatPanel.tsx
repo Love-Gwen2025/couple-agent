@@ -4,15 +4,15 @@
  * 主聊天界面，整合消息列表、输入框和模型选择器
  */
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useAuthStore, useConversationStore, useModelStore } from '../../store';
+import { useAgentStore, useAuthStore, useConversationStore, useNavigationStore } from '../../store';
 import { useSSEChat, useMessageTree } from '../../hooks';
 import { getConversationHistory } from '../../api';
 import { setCurrentMessage } from '../../api/branch';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
-import { ModelSelector } from './ModelSelector';
+import { AgentSelector } from './AgentSelector';
 import { GreetingScreen } from './GreetingScreen';
-import type { Message } from '../../types';
+import type { Message, TraceItem } from '../../types';
 
 /**
  * 聊天面板组件
@@ -20,10 +20,12 @@ import type { Message } from '../../types';
 export function ChatPanel() {
   // 认证状态
   const { user } = useAuthStore();
+  const { setCurrentPage } = useNavigationStore();
 
   // 会话状态
   const {
     currentConversationId,
+    conversations,
     streamingContent,
     setStreamingContent,
     clearStreamingContent,
@@ -31,8 +33,8 @@ export function ChatPanel() {
     updateConversation,
   } = useConversationStore();
 
-  // 模型状态
-  const { currentModelCode, currentModelId } = useModelStore();
+  // Agent 状态
+  const { currentAgentId, setCurrentAgentId } = useAgentStore();
 
   // 消息树管理
   const {
@@ -54,6 +56,9 @@ export function ChatPanel() {
   const latestStreamingRef = useRef<string>('');
   const latestMessageIdRef = useRef<number | string | null>(null);
   const pendingTempUserIdRef = useRef<string | null>(null);
+  const streamTraceRef = useRef<TraceItem[]>([]);
+  const [traceByMessageId, setTraceByMessageId] = useState<Record<string, TraceItem[]>>({});
+  const [streamTrace, setStreamTrace] = useState<TraceItem[]>([]);
   const [navLoadingId, setNavLoadingId] = useState<string | null>(null);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const regeneratingIdRef = useRef<string | null>(null);
@@ -62,6 +67,20 @@ export function ChatPanel() {
 
   // SSE 聊天钩子
   const { isLoading, sendMessage, abort, activeTool } = useSSEChat({
+    onEvent: (event) => {
+      if (
+        event.type === 'agent_start' ||
+        event.type === 'agent_end' ||
+        event.type === 'agent_output' ||
+        event.type === 'tool_start' ||
+        event.type === 'tool_end' ||
+        event.type === 'error'
+      ) {
+        const item: TraceItem = { ...event, receivedAt: Date.now() };
+        streamTraceRef.current = [...streamTraceRef.current, item];
+        setStreamTrace(streamTraceRef.current);
+      }
+    },
     onChunk: (chunk) => {
       latestStreamingRef.current = `${latestStreamingRef.current}${chunk}`;
       setStreamingContent(latestStreamingRef.current);
@@ -70,6 +89,13 @@ export function ChatPanel() {
       const contentToSave = finalContent || latestStreamingRef.current;
       if (contentToSave) {
         latestMessageIdRef.current = event.messageId ?? null;
+
+        if (event.messageId) {
+          const trace = streamTraceRef.current;
+          if (trace.length > 0) {
+            setTraceByMessageId((prev) => ({ ...prev, [String(event.messageId)]: trace }));
+          }
+        }
 
         // 替换临时用户消息 ID 为服务器返回的真实 ID
         if (pendingTempUserIdRef.current && event.userMessageId) {
@@ -89,11 +115,15 @@ export function ChatPanel() {
       }
 
       latestStreamingRef.current = '';
+      streamTraceRef.current = [];
+      setStreamTrace([]);
       clearStreamingContent();
     },
     onError: (error) => {
       console.error('Chat Error:', error);
       latestStreamingRef.current = '';
+      streamTraceRef.current = [];
+      setStreamTrace([]);
       clearStreamingContent();
       setRegeneratingId(null);
       setNavLoadingId(null);
@@ -103,6 +133,23 @@ export function ChatPanel() {
   // 加载会话历史
   useEffect(() => {
     if (currentConversationId) loadHistory();
+  }, [currentConversationId]);
+
+  // 会话切换时同步 agent 选择（会话一旦绑定不可覆盖）
+  useEffect(() => {
+    if (!currentConversationId) return;
+    const conv = conversations.find((c) => c.id === currentConversationId) || null;
+    if (conv?.agentId) {
+      setCurrentAgentId(conv.agentId);
+    }
+  }, [currentConversationId, conversations, setCurrentAgentId]);
+
+  // 会话切换时清理本次会话内的过程记录（避免跨会话混淆）
+  useEffect(() => {
+    if (!currentConversationId) return;
+    streamTraceRef.current = [];
+    setStreamTrace([]);
+    setTraceByMessageId({});
   }, [currentConversationId]);
 
   async function loadHistory() {
@@ -157,12 +204,15 @@ export function ChatPanel() {
       regeneratingIdRef.current = String(message.id);
       latestStreamingRef.current = '';
       clearStreamingContent();
+      streamTraceRef.current = [];
+      setStreamTrace([]);
 
       sendMessage({
         conversationId: currentConversationId,
         content: lastUser.content,
-        modelCode: currentModelCode || undefined,
-        modelId: currentModelId || undefined,
+        agentId: (conversations.find((c) => c.id === currentConversationId)?.agentId ||
+          currentAgentId ||
+          undefined) as string | undefined,
         parentMessageId,
         regenerate: true,
       });
@@ -170,8 +220,8 @@ export function ChatPanel() {
     [
       clearStreamingContent,
       currentConversationId,
-      currentModelCode,
-      currentModelId,
+      conversations,
+      currentAgentId,
       displayMessages,
       sendMessage,
       user,
@@ -190,11 +240,14 @@ export function ChatPanel() {
       try {
         latestStreamingRef.current = '';
         clearStreamingContent();
+        streamTraceRef.current = [];
+        setStreamTrace([]);
         sendMessage({
           conversationId: currentConversationId,
           content: editingContent,
-          modelCode: currentModelCode || undefined,
-          modelId: currentModelId || undefined,
+          agentId: (conversations.find((c) => c.id === currentConversationId)?.agentId ||
+            currentAgentId ||
+            undefined) as string | undefined,
           parentMessageId: message.parentId || undefined,
         });
       } catch (error) {
@@ -207,8 +260,8 @@ export function ChatPanel() {
     [
       clearStreamingContent,
       currentConversationId,
-      currentModelCode,
-      currentModelId,
+      conversations,
+      currentAgentId,
       editingContent,
       sendMessage,
       user,
@@ -222,20 +275,22 @@ export function ChatPanel() {
 
   // 发送消息
   const handleSend = useCallback(
-    (content: string, mode?: string, knowledgeBaseIds?: string[]) => {
+    (content: string, mode?: string) => {
       if (!currentConversationId || !user) return;
 
       /*
        1. 获取当前会话的父消息，用于构建消息树关系。
-       2. 统一处理知识库选择为空的场景，避免触发检索。
       */
       const lastMessage = displayMessages.length > 0 ? displayMessages[displayMessages.length - 1] : null;
       const parentMessageId = lastMessage ? String(lastMessage.id) : undefined;
 
-      const normalizedKnowledgeBaseIds =
-        Array.isArray(knowledgeBaseIds) && knowledgeBaseIds.length > 0
-          ? knowledgeBaseIds
-          : undefined;
+      const lockedAgentId =
+        conversations.find((c) => c.id === currentConversationId)?.agentId || null;
+      const effectiveAgentId = lockedAgentId || currentAgentId;
+      if (!effectiveAgentId) {
+        alert('请先选择一个 Agent（模型/工具/知识库以 Agent 配置为准）');
+        return;
+      }
 
       // 乐观更新：立即显示用户消息
       const tempId = `temp-${Date.now()}`;
@@ -254,25 +309,31 @@ export function ChatPanel() {
 
       latestStreamingRef.current = '';
       clearStreamingContent();
+      streamTraceRef.current = [];
+      setStreamTrace([]);
+
+      // 如果会话尚未绑定 agentId，则本次消息将绑定（前端同步更新便于 UI 显示）
+      if (!lockedAgentId) {
+        updateConversation(currentConversationId, { agentId: effectiveAgentId });
+      }
       sendMessage({
         conversationId: currentConversationId,
         content,
-        modelCode: currentModelCode || undefined,
-        modelId: currentModelId || undefined,
+        agentId: effectiveAgentId,
         parentMessageId,
         mode: mode || 'chat',
-        knowledgeBaseIds: normalizedKnowledgeBaseIds,
       });
     },
     [
       currentConversationId,
-      currentModelCode,
-      currentModelId,
+      conversations,
+      currentAgentId,
       user,
       displayMessages,
       sendMessage,
       clearStreamingContent,
       addMessage,
+      updateConversation,
     ]
   );
 
@@ -283,10 +344,15 @@ export function ChatPanel() {
 
   return (
     <div className="flex-1 flex flex-col h-full relative bg-background ml-0 lg:ml-2">
-      {/* 模型选择器 */}
+      {/* Agent 选择器 */}
       <div className="absolute top-0 left-0 right-0 p-4 z-10 flex justify-between items-start pointer-events-none">
         <div className="pointer-events-auto">
-          <ModelSelector />
+          <AgentSelector
+            lockedAgentId={
+              conversations.find((c) => c.id === currentConversationId)?.agentId || null
+            }
+            onOpenAgents={() => setCurrentPage('agents')}
+          />
         </div>
       </div>
 
@@ -300,6 +366,8 @@ export function ChatPanel() {
             conversationId={currentConversationId}
             streamingContent={streamingContent}
             activeTool={activeTool}
+            traceByMessageId={traceByMessageId}
+            streamTrace={streamTrace}
             userAvatar={user?.avatar}
             regeneratingId={regeneratingId}
             navLoadingId={navLoadingId}
@@ -317,7 +385,17 @@ export function ChatPanel() {
       </div>
 
       {/* 输入区域 */}
-      <ChatInput isLoading={isLoading} onSend={handleSend} onAbort={abort} />
+      <ChatInput
+        isLoading={isLoading}
+        disabled={
+          Boolean(currentConversationId) &&
+          !(
+            conversations.find((c) => c.id === currentConversationId)?.agentId || currentAgentId
+          )
+        }
+        onSend={handleSend}
+        onAbort={abort}
+      />
     </div>
   );
 }

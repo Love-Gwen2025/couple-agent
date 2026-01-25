@@ -148,6 +148,72 @@ def planning_router(state: AgentState) -> Literal["search", "summary"]:
 # ========== 3. 上下文增强的 Chatbot 节点 ==========
 
 
+def _build_context_prompt(history_context: str, kb_context: str) -> str | None:
+    """
+    构建上下文提示词
+
+    Args:
+        history_context: 历史对话上下文
+        kb_context: 知识库上下文
+
+    Returns:
+        合并后的上下文字符串，无内容时返回 None
+    """
+    context_parts = []
+    if kb_context:
+        context_parts.append(kb_context)
+    if history_context:
+        context_parts.append(history_context)
+
+    return "\n\n".join(context_parts) if context_parts else None
+
+
+def _find_system_message_insert_index(messages: list) -> int:
+    """
+    查找系统消息的插入位置（在第一个 SystemMessage 之后）
+
+    Args:
+        messages: 消息列表
+
+    Returns:
+        插入索引位置
+    """
+    for i, m in enumerate(messages):
+        if isinstance(m, SystemMessage):
+            return i + 1
+    return 0
+
+
+def _inject_context_message(messages: list, context_prompt: str) -> list:
+    """
+    将上下文注入到消息列表中
+
+    Args:
+        messages: 原始消息列表
+        context_prompt: 上下文提示词
+
+    Returns:
+        注入上下文后的消息列表（新列表）
+    """
+    # 检查是否已有上下文系统消息
+    has_context = any(
+        isinstance(m, SystemMessage) and getattr(m, "id", None) == "sys_context" for m in messages
+    )
+
+    if has_context:
+        return messages
+
+    # 创建上下文消息并插入
+    context_message = SystemMessage(
+        content=f"以下是与用户问题相关的参考资料，请在回答时参考：\n\n{context_prompt}",
+        id="sys_context",
+    )
+    insert_idx = _find_system_message_insert_index(messages)
+    new_messages = list(messages)
+    new_messages.insert(insert_idx, context_message)
+    return new_messages
+
+
 def create_context_aware_chatbot_node(model):
     """
     创建上下文感知的 Chatbot 节点
@@ -182,34 +248,10 @@ def create_context_aware_chatbot_node(model):
         logger.info(f"📜 History context: {len(history_context)} chars")
         logger.info(f"📚 KB context: {len(kb_context)} chars")
 
-        # 构建上下文增强的系统提示
-        context_parts = []
-        if kb_context:
-            context_parts.append(kb_context)
-        if history_context:
-            context_parts.append(history_context)
-
-        if context_parts:
-            context_prompt = "\n\n".join(context_parts)
-            # 在消息列表开头注入上下文（作为系统消息的补充）
-            # 查找是否已有系统消息
-            has_system = any(
-                isinstance(m, SystemMessage) and getattr(m, "id", None) == "sys_context"
-                for m in messages
-            )
-
-            if not has_system:
-                context_message = SystemMessage(
-                    content=f"以下是与用户问题相关的参考资料，请在回答时参考：\n\n{context_prompt}",
-                    id="sys_context",
-                )
-                # 插入到系统指令之后
-                insert_idx = 0
-                for i, m in enumerate(messages):
-                    if isinstance(m, SystemMessage):
-                        insert_idx = i + 1
-                        break
-                messages.insert(insert_idx, context_message)
+        # 构建并注入上下文
+        context_prompt = _build_context_prompt(history_context, kb_context)
+        if context_prompt:
+            messages = _inject_context_message(messages, context_prompt)
 
         response = await model.ainvoke(messages)
 

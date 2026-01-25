@@ -24,7 +24,6 @@ interface PaginationProps {
 
 export function Pagination({
     current,
-    size: _size,  // 保留用于接口完整性
     total,
     pages,
     onChange,

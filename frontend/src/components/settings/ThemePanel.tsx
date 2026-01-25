@@ -11,7 +11,7 @@ import {
     type ThemeMode,
 } from '../../config/themes';
 import clsx from 'clsx';
-import { useEffect, useState, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /** 锚点位置信息 */
@@ -53,51 +53,40 @@ function getThemeModeIcon(mode: ThemeMode) {
 export function ThemePanel({ isOpen, onClose, anchorRect }: ThemePanelProps) {
     const { themeMode, setThemeMode } = useUIStore();
     const panelRef = useRef<HTMLDivElement>(null);
-    const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
 
-    // 根据锚点位置计算面板位置
-    useEffect(() => {
+    // 根据锚点位置计算面板位置（避免在 effect 中 setState 导致级联渲染）
+    const panelStyle = useMemo<React.CSSProperties>(() => {
         if (!isOpen || !anchorRect) {
-            // 没有锚点位置时，使用默认左下角定位
-            setPanelStyle({
+            return {
                 position: 'fixed',
                 bottom: '16px',
                 left: '16px',
-            });
-            return;
+            };
         }
 
-        // 面板宽度
         const panelWidth = 280;
-        // 面板高度（预估值，实际会根据内容变化）
         const panelHeight = 160;
-        // 间距
         const gap = 12;
 
-        // 计算面板位置：在按钮上方，左对齐
         let left = anchorRect.left;
         let bottom = window.innerHeight - anchorRect.top + gap;
 
-        // 确保面板不超出屏幕右边界
         if (left + panelWidth > window.innerWidth - 16) {
             left = window.innerWidth - panelWidth - 16;
         }
-
-        // 确保面板不超出屏幕左边界
         if (left < 16) {
             left = 16;
         }
 
-        // 如果上方空间不足，显示在按钮下方
         if (anchorRect.top - panelHeight - gap < 16) {
             bottom = window.innerHeight - anchorRect.top - anchorRect.height - panelHeight - gap;
         }
 
-        setPanelStyle({
+        return {
             position: 'fixed',
             bottom: `${bottom}px`,
             left: `${left}px`,
-        });
+        };
     }, [isOpen, anchorRect]);
 
     return (

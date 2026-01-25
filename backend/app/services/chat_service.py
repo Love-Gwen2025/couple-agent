@@ -15,10 +15,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent.graph import create_default_agent
+from app.agent.graph import create_agent_graph, create_default_agent
+from app.agent.platform_tools import build_tools_for_tool_refs
 from app.core.checkpointer import create_checkpointer
 from app.core.constants import AI_SENDER_ID, MAX_TITLE_LENGTH
 from app.core.settings import Settings
+from app.services.agent_service import AgentService
 from app.services.conversation_service import ConversationService
 from app.services.embedding_service import EmbeddingService
 from app.services.langfuse_service import get_langfuse_service
@@ -27,14 +29,12 @@ from app.tasks.embedding_tasks import store_message_embedding_task
 from app.utils.content import extract_text_content
 
 # 系统提示词
-SYSTEM_PROMPT = """你是一个智能助手。你可以使用以下工具来帮助回答问题：
-- rag_search: 搜索历史对话中的相关内容
-- web_search: 在互联网上搜索实时信息
-- get_current_time: 获取当前时间
-- simple_calculator: 进行数学计算
+SYSTEM_PROMPT = """你是一个智能助手。
 
-系统会自动从知识库中检索相关信息并提供给你参考。
-请根据用户的问题和提供的参考资料进行回答。保持回答简洁、准确、有帮助。"""
+请根据用户的问题与系统提供的参考资料进行回答，保持回答简洁、准确、有帮助。
+如果需要使用工具，请先调用工具再作答。"""
+
+TEAM_WORKER_SUFFIX = """\n\n你处于一个多 Agent 协作系统中：你的输出将提供给上级 Agent 生成最终回复。\n要求：\n1) 只输出结论、关键事实与建议，不要输出推理过程。\n2) 如引用资料/工具结果，请指出来源（简短即可）。\n3) 输出尽量结构化（要点/步骤）。\n"""
 
 
 class ChatService:
@@ -89,10 +89,7 @@ class ChatService:
             except Exception as e:
                 logger.warning(f"Failed to generate title with AI: {e}")
 
-        # 回退：截断消息作为标题
         return msg[:MAX_TITLE_LENGTH]
-
-    # _ensure_string 已移除，使用 app.utils.content.extract_text_content 替代
 
     async def _get_model_for_user(
         self,
@@ -102,9 +99,6 @@ class ChatService:
     ):
         """
         根据 model_id 获取用户配置的模型
-
-        注意：不再有系统默认模型，必须传入有效的 model_id
-
         Returns:
             ChatModel 实例（LangChain 兼容），如果未找到则返回 None
         """
@@ -174,11 +168,88 @@ class ChatService:
             ensure_ascii=False,
         )
 
+    async def _bind_agent_to_conversation(self, conversation, agent_id: int | None) -> None:
+        """绑定 Agent 到会话（会话以 agent 为执行单位，不允许覆盖）"""
+        if agent_id is None:
+            return
+
+        if conversation.agent_id and conversation.agent_id != agent_id:
+            raise ValueError("该会话已绑定其他 Agent，禁止覆盖")
+
+        if conversation.agent_id is None:
+            conversation.agent_id = agent_id
+            await self.conversation_service.db.commit()
+
+    async def _generate_title_if_needed(
+        self,
+        conversation,
+        content: str,
+        user_id: int,
+        agent_id: int | None,
+        model_id: str | None,
+        db: AsyncSession | None,
+    ) -> str | None:
+        """首次消息时生成会话标题"""
+        if conversation.current_message_id:
+            return None
+
+        # 优先使用 Agent 绑定模型生成标题
+        title_model_id = model_id
+        if not title_model_id and agent_id and db:
+            agent_service = AgentService(db)
+            agent = await agent_service.get_agent(user_id, agent_id)
+            if agent:
+                title_model_id = str(agent.user_model_id)
+
+        generated_title = await self._create_title(content, user_id, title_model_id, db)
+        await self.conversation_service.modify_conversation(
+            user_id, conversation.id, generated_title
+        )
+        return generated_title
+
+    async def _persist_user_message(
+        self,
+        conversation_id: int,
+        user_id: int,
+        content: str,
+        model_code: str | None,
+        parent_message_id: int | None,
+        regenerate: bool,
+    ):
+        """持久化用户消息（regenerate 模式跳过）"""
+        if regenerate:
+            return None
+
+        return await self.conversation_service.persist_message(
+            conversation_id=conversation_id,
+            sender_id=user_id,
+            role="user",
+            content=content,
+            content_type="TEXT",
+            model_code=model_code,
+            parent_id=parent_message_id,
+        )
+
+    async def _get_parent_checkpoint(
+        self, regenerate: bool, parent_message_id: int | None
+    ) -> str | None:
+        """获取 regenerate 回退的 checkpoint ID"""
+        if not regenerate or not parent_message_id:
+            return None
+
+        parent_msg = await self.conversation_service.get_message_by_id(parent_message_id)
+        if parent_msg and parent_msg.checkpoint_id:
+            logger.info(f"[stream] Rollback to checkpoint: {parent_msg.checkpoint_id}")
+            return parent_msg.checkpoint_id
+
+        return None
+
     async def _prepare_stream_context(
         self,
         user_id: int,
         conversation_id: int,
         content: str,
+        agent_id: int | None,
         model_code: str | None,
         model_id: str | None,
         regenerate: bool,
@@ -191,37 +262,19 @@ class ChatService:
         Returns:
             (conversation, generated_title, user_message, parent_checkpoint_id)
         """
-        # 1. 校验会话归属
         conversation = await self.conversation_service.ensure_owner(conversation_id, user_id)
 
-        # 2. 首次消息时生成标题
-        generated_title = None
-        if not conversation.current_message_id:
-            generated_title = await self._create_title(content, user_id, model_id, db)
-            await self.conversation_service.modify_conversation(
-                user_id, conversation_id, generated_title
-            )
+        await self._bind_agent_to_conversation(conversation, agent_id)
 
-        # 3. 持久化用户消息（regenerate 模式跳过）
-        user_message = None
-        if not regenerate:
-            user_message = await self.conversation_service.persist_message(
-                conversation_id=conversation_id,
-                sender_id=user_id,
-                role="user",
-                content=content,
-                content_type="TEXT",
-                model_code=model_code,
-                parent_id=parent_message_id,
-            )
+        generated_title = await self._generate_title_if_needed(
+            conversation, content, user_id, agent_id, model_id, db
+        )
 
-        # 4. 处理 regenerate 回退
-        parent_checkpoint_id = None
-        if regenerate and parent_message_id:
-            parent_msg = await self.conversation_service.get_message_by_id(parent_message_id)
-            if parent_msg and parent_msg.checkpoint_id:
-                parent_checkpoint_id = parent_msg.checkpoint_id
-                logger.info(f"[stream] Rollback to checkpoint: {parent_checkpoint_id}")
+        user_message = await self._persist_user_message(
+            conversation_id, user_id, content, model_code, parent_message_id, regenerate
+        )
+
+        parent_checkpoint_id = await self._get_parent_checkpoint(regenerate, parent_message_id)
 
         return conversation, generated_title, user_message, parent_checkpoint_id
 
@@ -230,6 +283,7 @@ class ChatService:
         user_id: int,
         conversation_id: int,
         content: str,
+        agent_id: int | None = None,
         model_code: str | None = None,
         model_id: str | None = None,
         regenerate: bool = False,
@@ -254,6 +308,7 @@ class ChatService:
             user_id: 用户 ID
             conversation_id: 会话 ID
             content: 用户消息内容
+            agent_id: Agent ID（平台化后使用；会话绑定后不可覆盖）
             model_code: 模型编码（保留兼容）
             model_id: 用户模型 ID，传此参数则使用用户自定义模型
             regenerate: 重新生成模式，跳过用户消息持久化
@@ -266,16 +321,26 @@ class ChatService:
             JSON 格式的 SSE 数据
         """
         # 1. 准备上下文（校验归属、生成标题、持久化用户消息、处理 regenerate）
-        _, generated_title, user_message, parent_checkpoint_id = await self._prepare_stream_context(
-            user_id,
-            conversation_id,
-            content,
-            model_code,
-            model_id,
-            regenerate,
-            parent_message_id,
-            db,
-        )
+        try:
+            (
+                conversation,
+                generated_title,
+                user_message,
+                parent_checkpoint_id,
+            ) = await self._prepare_stream_context(
+                user_id,
+                conversation_id,
+                content,
+                agent_id,
+                model_code,
+                model_id,
+                regenerate,
+                parent_message_id,
+                db,
+            )
+        except ValueError as exc:
+            yield self._format_sse_event("error", conversation_id, error=str(exc))
+            return
 
         full_reply = []
         placeholder_message_id = -1
@@ -290,120 +355,575 @@ class ChatService:
         # 用于在 checkpointer 上下文外访问的变量
         latest_checkpoint_id = None
 
-        # 动态获取模型
-        model = await self._get_model_for_user(user_id, model_id, db)
+        effective_agent_id = conversation.agent_id
 
-        if model:
-            async with create_checkpointer(self.settings) as checkpointer:
-                # 创建带工具的 Agent
-                graph = create_default_agent(
-                    model=model,
-                    checkpointer=checkpointer,
-                    enable_rewrite=True,
-                )
-
-                # 构建输入消息
-                # 给 SystemMessage 固定 ID，防止 LangGraph 重复追加
-                if regenerate and parent_checkpoint_id:
-                    # 重新生成时，不添加新消息，直接从父 checkpoint 继续执行
-                    # 这样新生成的 checkpoint 会成为原 checkpoint 的兄弟
-                    input_messages = []
-                else:
-                    input_messages = [
-                        SystemMessage(content=SYSTEM_PROMPT, id="sys_instruction"),
-                        HumanMessage(content=content),
-                    ]
-
-                # 构建 Graph 输入状态
-                # 包含知识库配置和依赖注入
-                graph_input = {
-                    "messages": input_messages,
-                    "mode": mode,
-                    "question": content,
-                    "search_queries": [],
-                    "references": {},
-                    "planning_rounds": 0,
-                    # 知识库相关
-                    "knowledge_base_ids": knowledge_base_ids or [],
-                    "history_context": "",
-                    "kb_context": "",
-                    # 注意：embedding_service, db_session, conversation_id
-                    # 通过 config['configurable'] 传递，不放在 state 中，
-                    # 以避免 LangGraph checkpoint 序列化问题
-                }
-
-                # 使用 astream_events 获得 token 级流式输出
-                logger.info(
-                    f"[stream] Starting graph with mode={mode}, kb_ids={knowledge_base_ids or []}"
-                )
-
-                # 注入 Langfuse callback（如果启用）
-                langfuse_service = get_langfuse_service(self.settings)
-                langfuse_handler = langfuse_service.get_callback_handler(
-                    user_id=str(user_id) if user_id else None,
-                    session_id=str(conversation_id),
-                    trace_name=f"{mode}_chat",
-                    metadata={"mode": mode, "regenerate": regenerate},
-                )
-                if langfuse_handler:
-                    config["callbacks"] = [langfuse_handler]
-                    logger.info("📊 Langfuse tracing enabled")
-
-                async for event in graph.astream_events(graph_input, config=config, version="v2"):
-                    kind = event.get("event", "")
-
-                    # LLM 生成的 token
-                    if kind == "on_chat_model_stream":
-                        # 过滤掉非最终输出的节点（planning、search 等中间节点）
-                        # 只输出 chatbot（普通聊天）和 summary（DeepSearch 总结）节点的内容
-                        metadata = event.get("metadata", {})
-                        node_name = metadata.get("langgraph_node", "")
-
-                        # 允许输出的节点白名单
-                        output_nodes = {"chatbot", "summary"}
-                        if node_name and node_name not in output_nodes:
-                            continue  # 跳过中间节点的输出
-
-                        chunk = event.get("data", {}).get("chunk")
-                        if chunk and hasattr(chunk, "content") and chunk.content:
-                            # 使用统一工具函数处理 Gemini 格式
-                            token = extract_text_content(chunk.content)
-                            if token:  # 只处理非空 token
-                                full_reply.append(token)
-                                yield self._format_sse_event(
-                                    "chunk",
-                                    conversation_id,
-                                    content=token,
-                                    messageId=placeholder_message_id,
-                                )
-
-                    elif kind == "on_tool_start":
-                        tool_name = event.get("name", "unknown")
-                        logger.info(f"Tool started: {tool_name}")
-                        yield self._format_sse_event("tool_start", conversation_id, tool=tool_name)
-
-                    elif kind == "on_tool_end":
-                        tool_name = event.get("name", "unknown")
-                        logger.info(f"Tool ended: {tool_name}")
-                        yield self._format_sse_event("tool_end", conversation_id, tool=tool_name)
-
-                # 在同一个 checkpointer 上下文中获取最新 checkpoint ID，避免重新创建连接
-                config_for_list = {"configurable": {"thread_id": str(conversation_id)}}
-                try:
-                    async for checkpoint_tuple in checkpointer.alist(config_for_list, limit=1):
-                        checkpoint = checkpoint_tuple.checkpoint or {}
-                        latest_checkpoint_id = checkpoint.get("id")
-                        break
-                except Exception as exc:
-                    logger.error(f"Failed to fetch latest checkpoint: {exc}")
-
-        else:
-            # 未接入模型时的回退
-            fallback = f"暂未接入模型，回显: {content}"
+        if effective_agent_id and not db:
+            fallback = "当前会话已绑定 Agent，但缺少数据库会话，无法执行。"
             full_reply.append(fallback)
             yield self._format_sse_event(
                 "chunk", conversation_id, content=fallback, messageId=placeholder_message_id
             )
+
+        elif effective_agent_id:
+            agent_service = AgentService(db)
+            try:
+                agent_cfg = await agent_service.get_agent_config(user_id, int(effective_agent_id))
+            except Exception as exc:
+                fallback = f"读取 Agent 配置失败: {exc}"
+                full_reply.append(fallback)
+                yield self._format_sse_event(
+                    "chunk", conversation_id, content=fallback, messageId=placeholder_message_id
+                )
+                agent_cfg = None
+
+            if agent_cfg:
+                agent = agent_cfg["agent"]
+                if agent.status != 1:
+                    fallback = "该 Agent 已禁用，无法执行。"
+                    full_reply.append(fallback)
+                    yield self._format_sse_event(
+                        "chunk", conversation_id, content=fallback, messageId=placeholder_message_id
+                    )
+                else:
+                    # ========== 单 Agent ==========
+                    if agent.kind == "single":
+                        tools, tool_meta = await build_tools_for_tool_refs(
+                            db, user_id, agent_cfg["toolRefs"]
+                        )
+                        model = await self._get_model_for_user(
+                            user_id, str(agent.user_model_id), db
+                        )
+
+                        if not model:
+                            fallback = "Agent 绑定的模型不可用，请检查模型配置。"
+                            full_reply.append(fallback)
+                            yield self._format_sse_event(
+                                "chunk",
+                                conversation_id,
+                                content=fallback,
+                                messageId=placeholder_message_id,
+                            )
+                        else:
+                            async with create_checkpointer(self.settings) as checkpointer:
+                                graph = create_agent_graph(
+                                    model=model,
+                                    tools=tools,
+                                    checkpointer=checkpointer,
+                                    enable_rewrite=True,
+                                )
+
+                                if regenerate and parent_checkpoint_id:
+                                    input_messages = []
+                                else:
+                                    input_messages = [
+                                        SystemMessage(
+                                            content=agent.system_prompt or SYSTEM_PROMPT,
+                                            id="sys_instruction",
+                                        ),
+                                        HumanMessage(content=content),
+                                    ]
+
+                                graph_input = {
+                                    "messages": input_messages,
+                                    "mode": mode,
+                                    "question": content,
+                                    "search_queries": [],
+                                    "references": {},
+                                    "planning_rounds": 0,
+                                    "knowledge_base_ids": agent_cfg["knowledgeBaseIds"] or [],
+                                    "history_context": "",
+                                    "kb_context": "",
+                                }
+
+                                yield self._format_sse_event(
+                                    "agent_start",
+                                    conversation_id,
+                                    agentId=str(agent.id),
+                                    agentName=agent.name,
+                                    agentKind=agent.kind,
+                                    role="single",
+                                )
+
+                                langfuse_service = get_langfuse_service(self.settings)
+                                langfuse_handler = langfuse_service.get_callback_handler(
+                                    user_id=str(user_id) if user_id else None,
+                                    session_id=str(conversation_id),
+                                    trace_name=f"{mode}_agent",
+                                    metadata={
+                                        "mode": mode,
+                                        "regenerate": regenerate,
+                                        "agentId": str(agent.id),
+                                    },
+                                )
+                                if langfuse_handler:
+                                    config["callbacks"] = [langfuse_handler]
+
+                                async for event in graph.astream_events(
+                                    graph_input, config=config, version="v2"
+                                ):
+                                    kind = event.get("event", "")
+
+                                    if kind == "on_chat_model_stream":
+                                        metadata = event.get("metadata", {})
+                                        node_name = metadata.get("langgraph_node", "")
+                                        output_nodes = {"chatbot", "summary"}
+                                        if node_name and node_name not in output_nodes:
+                                            continue
+
+                                        chunk = event.get("data", {}).get("chunk")
+                                        if chunk and hasattr(chunk, "content") and chunk.content:
+                                            token = extract_text_content(chunk.content)
+                                            if token:
+                                                full_reply.append(token)
+                                                yield self._format_sse_event(
+                                                    "chunk",
+                                                    conversation_id,
+                                                    content=token,
+                                                    messageId=placeholder_message_id,
+                                                )
+
+                                    elif kind == "on_tool_start":
+                                        tool_name = event.get("name", "unknown")
+                                        meta = tool_meta.get(tool_name, {})
+                                        yield self._format_sse_event(
+                                            "tool_start",
+                                            conversation_id,
+                                            tool=tool_name,
+                                            toolRef=meta.get("toolRef"),
+                                            toolDisplayName=meta.get("displayName"),
+                                            agentId=str(agent.id),
+                                            agentName=agent.name,
+                                        )
+
+                                    elif kind == "on_tool_end":
+                                        tool_name = event.get("name", "unknown")
+                                        meta = tool_meta.get(tool_name, {})
+                                        yield self._format_sse_event(
+                                            "tool_end",
+                                            conversation_id,
+                                            tool=tool_name,
+                                            toolRef=meta.get("toolRef"),
+                                            toolDisplayName=meta.get("displayName"),
+                                            agentId=str(agent.id),
+                                            agentName=agent.name,
+                                        )
+
+                                yield self._format_sse_event(
+                                    "agent_end",
+                                    conversation_id,
+                                    agentId=str(agent.id),
+                                    agentName=agent.name,
+                                    agentKind=agent.kind,
+                                    role="single",
+                                    status="success",
+                                )
+
+                                # 获取最新 checkpoint
+                                config_for_list = {
+                                    "configurable": {"thread_id": str(conversation_id)}
+                                }
+                                try:
+                                    async for checkpoint_tuple in checkpointer.alist(
+                                        config_for_list, limit=1
+                                    ):
+                                        checkpoint = checkpoint_tuple.checkpoint or {}
+                                        latest_checkpoint_id = checkpoint.get("id")
+                                        break
+                                except Exception as exc:
+                                    logger.error(f"Failed to fetch latest checkpoint: {exc}")
+
+                    # ========== Team Agent ==========
+                    else:
+                        # 1) 拉取成员 agents
+                        member_ids = agent_cfg.get("memberAgentIds") or []
+                        worker_notes: list[dict[str, str]] = []
+
+                        # 1.1 依次执行 workers（不持久化到会话 checkpoint）
+                        for member_id in member_ids:
+                            worker_cfg = await agent_service.get_agent_config(
+                                user_id, int(member_id)
+                            )
+                            worker_agent = worker_cfg["agent"]
+
+                            if worker_agent.status != 1:
+                                continue
+
+                            worker_tools, worker_tool_meta = await build_tools_for_tool_refs(
+                                db, user_id, worker_cfg["toolRefs"]
+                            )
+                            worker_model = await self._get_model_for_user(
+                                user_id, str(worker_agent.user_model_id), db
+                            )
+                            if not worker_model:
+                                continue
+
+                            worker_graph = create_agent_graph(
+                                model=worker_model,
+                                tools=worker_tools,
+                                checkpointer=None,
+                                enable_rewrite=True,
+                            )
+
+                            yield self._format_sse_event(
+                                "agent_start",
+                                conversation_id,
+                                agentId=str(worker_agent.id),
+                                agentName=worker_agent.name,
+                                agentKind=worker_agent.kind,
+                                role="worker",
+                                parentAgentId=str(agent.id),
+                            )
+
+                            worker_input_messages = [
+                                SystemMessage(
+                                    content=(worker_agent.system_prompt or SYSTEM_PROMPT)
+                                    + TEAM_WORKER_SUFFIX,
+                                    id="sys_instruction",
+                                ),
+                                HumanMessage(content=content),
+                            ]
+                            worker_graph_input = {
+                                "messages": worker_input_messages,
+                                "mode": "chat",  # workers 统一使用 chat（减少重复 deep_search 开销）
+                                "question": content,
+                                "search_queries": [],
+                                "references": {},
+                                "planning_rounds": 0,
+                                "knowledge_base_ids": worker_cfg["knowledgeBaseIds"] or [],
+                                "history_context": "",
+                                "kb_context": "",
+                            }
+
+                            # workers 的 token 不作为最终 chunk 输出，仅收集为过程信息
+                            worker_text_parts: list[str] = []
+                            async for event in worker_graph.astream_events(
+                                worker_graph_input, config=config, version="v2"
+                            ):
+                                kind = event.get("event", "")
+
+                                if kind == "on_chat_model_stream":
+                                    metadata = event.get("metadata", {})
+                                    node_name = metadata.get("langgraph_node", "")
+                                    output_nodes = {"chatbot", "summary"}
+                                    if node_name and node_name not in output_nodes:
+                                        continue
+
+                                    chunk = event.get("data", {}).get("chunk")
+                                    if chunk and hasattr(chunk, "content") and chunk.content:
+                                        token = extract_text_content(chunk.content)
+                                        if token:
+                                            worker_text_parts.append(token)
+
+                                elif kind == "on_tool_start":
+                                    tool_name = event.get("name", "unknown")
+                                    meta = worker_tool_meta.get(tool_name, {})
+                                    yield self._format_sse_event(
+                                        "tool_start",
+                                        conversation_id,
+                                        tool=tool_name,
+                                        toolRef=meta.get("toolRef"),
+                                        toolDisplayName=meta.get("displayName"),
+                                        agentId=str(worker_agent.id),
+                                        agentName=worker_agent.name,
+                                    )
+
+                                elif kind == "on_tool_end":
+                                    tool_name = event.get("name", "unknown")
+                                    meta = worker_tool_meta.get(tool_name, {})
+                                    yield self._format_sse_event(
+                                        "tool_end",
+                                        conversation_id,
+                                        tool=tool_name,
+                                        toolRef=meta.get("toolRef"),
+                                        toolDisplayName=meta.get("displayName"),
+                                        agentId=str(worker_agent.id),
+                                        agentName=worker_agent.name,
+                                    )
+
+                            worker_text = "".join(worker_text_parts).strip()
+                            if worker_text:
+                                yield self._format_sse_event(
+                                    "agent_output",
+                                    conversation_id,
+                                    agentId=str(worker_agent.id),
+                                    agentName=worker_agent.name,
+                                    role="worker",
+                                    content=worker_text,
+                                )
+                                worker_notes.append(
+                                    {
+                                        "agentName": worker_agent.name,
+                                        "content": worker_text,
+                                    }
+                                )
+
+                            yield self._format_sse_event(
+                                "agent_end",
+                                conversation_id,
+                                agentId=str(worker_agent.id),
+                                agentName=worker_agent.name,
+                                agentKind=worker_agent.kind,
+                                role="worker",
+                                status="success",
+                            )
+
+                        # 2) 执行 supervisor（持久化 checkpoint + 最终输出）
+                        supervisor_tools, supervisor_tool_meta = await build_tools_for_tool_refs(
+                            db, user_id, agent_cfg["toolRefs"]
+                        )
+                        supervisor_model = await self._get_model_for_user(
+                            user_id, str(agent.user_model_id), db
+                        )
+
+                        if not supervisor_model:
+                            fallback = "Team Agent 绑定的模型不可用，请检查模型配置。"
+                            full_reply.append(fallback)
+                            yield self._format_sse_event(
+                                "chunk",
+                                conversation_id,
+                                content=fallback,
+                                messageId=placeholder_message_id,
+                            )
+                        else:
+                            async with create_checkpointer(self.settings) as checkpointer:
+                                supervisor_graph = create_agent_graph(
+                                    model=supervisor_model,
+                                    tools=supervisor_tools,
+                                    checkpointer=checkpointer,
+                                    enable_rewrite=True,
+                                )
+
+                                team_context = ""
+                                if worker_notes:
+                                    team_context = "\n\n".join(
+                                        [
+                                            f"[{n['agentName']}]\n{n['content']}"
+                                            for n in worker_notes
+                                        ]
+                                    )
+
+                                if regenerate and parent_checkpoint_id:
+                                    input_messages = []
+                                else:
+                                    input_messages = [
+                                        SystemMessage(
+                                            content=agent.system_prompt or SYSTEM_PROMPT,
+                                            id="sys_instruction",
+                                        ),
+                                    ]
+                                    if team_context:
+                                        input_messages.append(
+                                            SystemMessage(
+                                                content="以下是多个专家 Agent 的中间结论（可引用用于综合，但不要原样照搬）：\n\n"
+                                                + team_context,
+                                                id="sys_team_context",
+                                            )
+                                        )
+                                    input_messages.append(HumanMessage(content=content))
+
+                                graph_input = {
+                                    "messages": input_messages,
+                                    "mode": mode,
+                                    "question": content,
+                                    "search_queries": [],
+                                    "references": {
+                                        "Agent协作": [team_context] if team_context else []
+                                    },
+                                    "planning_rounds": 0,
+                                    "knowledge_base_ids": agent_cfg["knowledgeBaseIds"] or [],
+                                    "history_context": "",
+                                    "kb_context": "",
+                                }
+
+                                yield self._format_sse_event(
+                                    "agent_start",
+                                    conversation_id,
+                                    agentId=str(agent.id),
+                                    agentName=agent.name,
+                                    agentKind=agent.kind,
+                                    role="supervisor",
+                                )
+
+                                langfuse_service = get_langfuse_service(self.settings)
+                                langfuse_handler = langfuse_service.get_callback_handler(
+                                    user_id=str(user_id) if user_id else None,
+                                    session_id=str(conversation_id),
+                                    trace_name=f"{mode}_team_agent",
+                                    metadata={
+                                        "mode": mode,
+                                        "regenerate": regenerate,
+                                        "agentId": str(agent.id),
+                                    },
+                                )
+                                if langfuse_handler:
+                                    config["callbacks"] = [langfuse_handler]
+
+                                async for event in supervisor_graph.astream_events(
+                                    graph_input, config=config, version="v2"
+                                ):
+                                    kind = event.get("event", "")
+
+                                    if kind == "on_chat_model_stream":
+                                        metadata = event.get("metadata", {})
+                                        node_name = metadata.get("langgraph_node", "")
+                                        output_nodes = {"chatbot", "summary"}
+                                        if node_name and node_name not in output_nodes:
+                                            continue
+
+                                        chunk = event.get("data", {}).get("chunk")
+                                        if chunk and hasattr(chunk, "content") and chunk.content:
+                                            token = extract_text_content(chunk.content)
+                                            if token:
+                                                full_reply.append(token)
+                                                yield self._format_sse_event(
+                                                    "chunk",
+                                                    conversation_id,
+                                                    content=token,
+                                                    messageId=placeholder_message_id,
+                                                )
+
+                                    elif kind == "on_tool_start":
+                                        tool_name = event.get("name", "unknown")
+                                        meta = supervisor_tool_meta.get(tool_name, {})
+                                        yield self._format_sse_event(
+                                            "tool_start",
+                                            conversation_id,
+                                            tool=tool_name,
+                                            toolRef=meta.get("toolRef"),
+                                            toolDisplayName=meta.get("displayName"),
+                                            agentId=str(agent.id),
+                                            agentName=agent.name,
+                                        )
+
+                                    elif kind == "on_tool_end":
+                                        tool_name = event.get("name", "unknown")
+                                        meta = supervisor_tool_meta.get(tool_name, {})
+                                        yield self._format_sse_event(
+                                            "tool_end",
+                                            conversation_id,
+                                            tool=tool_name,
+                                            toolRef=meta.get("toolRef"),
+                                            toolDisplayName=meta.get("displayName"),
+                                            agentId=str(agent.id),
+                                            agentName=agent.name,
+                                        )
+
+                                yield self._format_sse_event(
+                                    "agent_end",
+                                    conversation_id,
+                                    agentId=str(agent.id),
+                                    agentName=agent.name,
+                                    agentKind=agent.kind,
+                                    role="supervisor",
+                                    status="success",
+                                )
+
+                                config_for_list = {
+                                    "configurable": {"thread_id": str(conversation_id)}
+                                }
+                                try:
+                                    async for checkpoint_tuple in checkpointer.alist(
+                                        config_for_list, limit=1
+                                    ):
+                                        checkpoint = checkpoint_tuple.checkpoint or {}
+                                        latest_checkpoint_id = checkpoint.get("id")
+                                        break
+                                except Exception as exc:
+                                    logger.error(f"Failed to fetch latest checkpoint: {exc}")
+
+        else:
+            # 兼容旧路径：动态获取模型（来自请求），使用默认 Agent 图
+            model = await self._get_model_for_user(user_id, model_id, db)
+
+            if model:
+                async with create_checkpointer(self.settings) as checkpointer:
+                    graph = create_default_agent(
+                        model=model,
+                        checkpointer=checkpointer,
+                        enable_rewrite=True,
+                    )
+
+                    if regenerate and parent_checkpoint_id:
+                        input_messages = []
+                    else:
+                        input_messages = [
+                            SystemMessage(content=SYSTEM_PROMPT, id="sys_instruction"),
+                            HumanMessage(content=content),
+                        ]
+
+                    graph_input = {
+                        "messages": input_messages,
+                        "mode": mode,
+                        "question": content,
+                        "search_queries": [],
+                        "references": {},
+                        "planning_rounds": 0,
+                        "knowledge_base_ids": knowledge_base_ids or [],
+                        "history_context": "",
+                        "kb_context": "",
+                    }
+
+                    langfuse_service = get_langfuse_service(self.settings)
+                    langfuse_handler = langfuse_service.get_callback_handler(
+                        user_id=str(user_id) if user_id else None,
+                        session_id=str(conversation_id),
+                        trace_name=f"{mode}_chat",
+                        metadata={"mode": mode, "regenerate": regenerate},
+                    )
+                    if langfuse_handler:
+                        config["callbacks"] = [langfuse_handler]
+
+                    async for event in graph.astream_events(
+                        graph_input, config=config, version="v2"
+                    ):
+                        kind = event.get("event", "")
+
+                        if kind == "on_chat_model_stream":
+                            metadata = event.get("metadata", {})
+                            node_name = metadata.get("langgraph_node", "")
+                            output_nodes = {"chatbot", "summary"}
+                            if node_name and node_name not in output_nodes:
+                                continue
+
+                            chunk = event.get("data", {}).get("chunk")
+                            if chunk and hasattr(chunk, "content") and chunk.content:
+                                token = extract_text_content(chunk.content)
+                                if token:
+                                    full_reply.append(token)
+                                    yield self._format_sse_event(
+                                        "chunk",
+                                        conversation_id,
+                                        content=token,
+                                        messageId=placeholder_message_id,
+                                    )
+
+                        elif kind == "on_tool_start":
+                            tool_name = event.get("name", "unknown")
+                            yield self._format_sse_event(
+                                "tool_start", conversation_id, tool=tool_name
+                            )
+
+                        elif kind == "on_tool_end":
+                            tool_name = event.get("name", "unknown")
+                            yield self._format_sse_event(
+                                "tool_end", conversation_id, tool=tool_name
+                            )
+
+                    config_for_list = {"configurable": {"thread_id": str(conversation_id)}}
+                    try:
+                        async for checkpoint_tuple in checkpointer.alist(config_for_list, limit=1):
+                            checkpoint = checkpoint_tuple.checkpoint or {}
+                            latest_checkpoint_id = checkpoint.get("id")
+                            break
+                    except Exception as exc:
+                        logger.error(f"Failed to fetch latest checkpoint: {exc}")
+
+            else:
+                fallback = f"暂未接入模型，回显: {content}"
+                full_reply.append(fallback)
+                yield self._format_sse_event(
+                    "chunk", conversation_id, content=fallback, messageId=placeholder_message_id
+                )
 
         # 5. 持久化助手消息
         reply_text = "".join(full_reply) if full_reply else ""

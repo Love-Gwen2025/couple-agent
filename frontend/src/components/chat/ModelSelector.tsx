@@ -5,7 +5,7 @@
  * 1. 显示可用模型下拉列表
  * 2. 支持模型切换（用 id 唯一标识）
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, Bot, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore, useModelStore } from '../../store';
@@ -21,11 +21,7 @@ export function ModelSelector() {
     useModelStore();
   const [isOpen, setIsOpen] = useState(false);
 
-  useEffect(() => {
-    if (token) loadModels();
-  }, [token]);
-
-  async function loadModels() {
+  const loadModels = useCallback(async () => {
     try {
       const data = await getModels();
       setModels(data);
@@ -39,7 +35,11 @@ export function ModelSelector() {
     } catch (error) {
       console.error('加载模型列表失败:', error);
     }
-  }
+  }, [currentModelId, setCurrentModelCode, setCurrentModelId, setModels]);
+
+  useEffect(() => {
+    if (token) void loadModels();
+  }, [token, loadModels]);
 
   // 通过 id 匹配当前选中的模型
   const currentModel = models.find((m) => String(m.id) === currentModelId);

@@ -9,7 +9,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Plus, MessageSquare, Trash2, Menu, Settings, Pencil, type LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAuthStore, useConversationStore, useUIStore } from '../../store';
+import { useAgentStore, useAuthStore, useConversationStore, useUIStore } from '../../store';
 import { SIDEBAR_COLLAPSED_WIDTH } from '../../store/uiStore';
 import { getConversations, createConversation, deleteConversation, updateConversationTitle } from '../../api';
 import clsx from 'clsx';
@@ -178,6 +178,9 @@ export function Sidebar() {
   // 认证状态
   const { token, user } = useAuthStore();
 
+  // Agent 选择（用于新建会话时绑定 agentId）
+  const { currentAgentId } = useAgentStore();
+
   // 会话状态
   const {
     conversations,
@@ -294,7 +297,10 @@ export function Sidebar() {
 
   async function handleCreateConversation() {
     try {
-      const newConversation = await createConversation({ title: 'New chat' });
+      const newConversation = await createConversation({
+        title: 'New chat',
+        agentId: currentAgentId || undefined,
+      });
       addConversation(newConversation);
       setCurrentConversationId(newConversation.id);
     } catch (error) {

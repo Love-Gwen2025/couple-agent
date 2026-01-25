@@ -14,6 +14,8 @@ interface UseSSEChatOptions {
   onComplete?: (event: StreamChatEvent, finalContent: string) => void;
   /** 发生错误时的回调 */
   onError?: (error: string) => void;
+  /** 收到任意 SSE 事件时的回调（包含 agent/tool 事件） */
+  onEvent?: (event: StreamChatEvent) => void;
   /** 工具开始调用时的回调 */
   onToolStart?: (toolName: string) => void;
   /** 工具调用结束时的回调 */
@@ -36,30 +38,13 @@ interface UseSSEChatReturn {
 }
 
 /**
- * 工具名称到中文显示名称的映射
- */
-const TOOL_DISPLAY_NAMES: Record<string, string> = {
-  rag_search: '搜索历史对话',
-  web_search: '搜索网页',
-  get_current_time: '获取当前时间',
-  simple_calculator: '计算',
-};
-
-/**
- * 获取工具的显示名称
- */
-export function getToolDisplayName(toolName: string): string {
-  return TOOL_DISPLAY_NAMES[toolName] || toolName;
-}
-
-/**
  * SSE 流式聊天 Hook
  *
  * @param options 配置选项
  * @returns SSE 聊天控制器
  */
 export function useSSEChat(options: UseSSEChatOptions = {}): UseSSEChatReturn {
-  const { onChunk, onComplete, onError, onToolStart, onToolEnd } = options;
+  const { onChunk, onComplete, onError, onEvent, onToolStart, onToolEnd } = options;
 
   const [isLoading, setIsLoading] = useState(false);
   const [content, setContent] = useState('');
@@ -153,6 +138,7 @@ export function useSSEChat(options: UseSSEChatOptions = {}): UseSSEChatReturn {
 
               try {
                 const event: StreamChatEvent = JSON.parse(jsonStr);
+                onEvent?.(event);
 
                 if (event.type === 'chunk' && event.content) {
                   accumulatedContent += event.content;
@@ -169,12 +155,14 @@ export function useSSEChat(options: UseSSEChatOptions = {}): UseSSEChatReturn {
                   onError?.(event.error || '未知错误');
                 } else if (event.type === 'tool_start' && event.tool) {
                   // 工具开始调用
-                  setActiveTool(event.tool);
-                  onToolStart?.(event.tool);
+                  const toolName = event.toolDisplayName || event.toolRef || event.tool;
+                  setActiveTool(toolName);
+                  onToolStart?.(toolName);
                 } else if (event.type === 'tool_end' && event.tool) {
                   // 工具调用结束
                   setActiveTool(null);
-                  onToolEnd?.(event.tool);
+                  const toolName = event.toolDisplayName || event.toolRef || event.tool;
+                  onToolEnd?.(toolName);
                 }
               } catch {
                 console.warn('Failed to parse SSE data:', jsonStr);

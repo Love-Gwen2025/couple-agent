@@ -1,6 +1,6 @@
 from typing import Annotated, Generic, TypeVar
 
-from pydantic import BaseModel, Field, PlainSerializer
+from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer
 from pydantic.generics import GenericModel
 
 T = TypeVar("T")
@@ -12,25 +12,42 @@ T = TypeVar("T")
 # 使用此类型可自动将 int 序列化为 str，避免前端精度问题
 
 
+def _parse_snowflake_id(v: int | str | None) -> int | None:
+    """将雪花ID解析为整数（用于接收前端字符串格式的ID）"""
+    if v is None:
+        return None
+    return int(v)
+
+
 def _serialize_snowflake_id(v: int | str | None) -> str | None:
     """将雪花ID序列化为字符串"""
     return str(v) if v is not None else None
 
 
 SnowflakeId = Annotated[
-    int | str,  # 允许 int 或 str 输入
-    PlainSerializer(_serialize_snowflake_id, return_type=str | None),
+    int,
+    BeforeValidator(_parse_snowflake_id),  # 输入时：str/int -> int
+    PlainSerializer(_serialize_snowflake_id, return_type=str | None),  # 输出时：int -> str
 ]
 """
-雪花ID类型 - 自动序列化为字符串
+雪花ID类型 - 自动处理输入输出类型转换
+
+特性:
+    - 输入：接受 int 或 str，自动转为 int 存储
+    - 输出：序列化为 str，避免 JS 精度丢失
 
 用法:
     class MyVo(BaseModel):
         id: SnowflakeId  # 输入可以是 int 或 str，输出始终是 str
 
 示例:
-    vo = MyVo(id=271928414351396864)
-    vo.model_dump_json()  # {"id": "271928414351396864"}
+    # 接收请求
+    payload = AgentPayload(userModelId="273666973819211776")  # str -> int
+    print(payload.userModelId)  # 273666973819211776 (int)
+    
+    # 返回响应
+    vo = AgentVo(id=273666973819211776)
+    vo.model_dump_json()  # {"id": "273666973819211776"}
 """
 
 

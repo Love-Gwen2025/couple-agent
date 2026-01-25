@@ -13,7 +13,7 @@ export async function getModels(): Promise<AiModel[]> {
   try {
     const response = await apiClient.get<ApiResponse<AiModel[]>>('/model');
     return response.data.data || [];
-  } catch (e) {
+  } catch {
     // 后端未提供模型接口时，返回空数组以保证前端可用
     return [];
   }

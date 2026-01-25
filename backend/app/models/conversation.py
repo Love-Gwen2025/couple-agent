@@ -16,6 +16,7 @@ class Conversation(Base):
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     title: Mapped[str | None] = mapped_column(String(255))
     model_code: Mapped[str | None] = mapped_column(String(50))
+    agent_id: Mapped[int | None] = mapped_column(BigInteger)
     last_message_id: Mapped[int | None] = mapped_column(BigInteger)
     last_message_at: Mapped[datetime | None] = mapped_column()
     ext: Mapped[dict | None] = mapped_column(JSON)
@@ -34,6 +35,7 @@ class Conversation(Base):
             "title": self.title,
             "userId": self.user_id,  # SnowflakeId 会自动序列化为字符串
             "modelCode": self.model_code,
+            "agentId": self.agent_id,
             "lastMessageId": self.last_message_id,  # SnowflakeId | None 自动处理
             "lastMessageAt": self.last_message_at.isoformat() if self.last_message_at else None,
             "avatar": self.avatar,

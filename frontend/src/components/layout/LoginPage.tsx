@@ -46,7 +46,7 @@ export function LoginPage({ onBack }: LoginPageProps) {
         setToken(token);
         setUser({ id: 0, userCode: username, userName: username });
       }, 1000);
-    } catch (loginErr) {
+    } catch {
       try {
         // 2. 登录失败，尝试自动注册
         await register(params);
@@ -57,7 +57,7 @@ export function LoginPage({ onBack }: LoginPageProps) {
           setToken(token);
           setUser({ id: 0, userCode: username, userName: username });
         }, 1000);
-      } catch (registerErr) {
+      } catch {
         setError('登录失败，请检查您的凭据');
       }
     } finally {

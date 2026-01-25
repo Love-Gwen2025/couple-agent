@@ -32,7 +32,11 @@ class ConversationService:
         return conversation
 
     async def create_conversation(
-        self, user_id: int, title: str | None, model_code: str | None
+        self,
+        user_id: int,
+        title: str | None,
+        model_code: str | None,
+        agent_id: int | None = None,
     ) -> int:
         """
         1. 创建机器人会话，标题为空时给默认值。
@@ -42,6 +46,7 @@ class ConversationService:
             user_id=user_id,
             title=title if title else "与聊天助手的会话",
             model_code=model_code,
+            agent_id=agent_id,
         )
         self.db.add(conversation)
         await self.db.commit()

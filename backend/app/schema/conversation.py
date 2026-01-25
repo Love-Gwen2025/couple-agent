@@ -19,6 +19,7 @@ class ConversationParam(BaseModel):
     id: str | None = Field(default=None, description="会话 ID，可为空")
     title: str | None = Field(default=None, description="会话标题")
     modelCode: str | None = Field(default=None, description="默认模型编码")
+    agentId: str | None = Field(default=None, description="绑定的 Agent ID（平台化后使用）")
 
 
 class MessageSendParam(BaseModel):
@@ -39,6 +40,7 @@ class StreamChatParam(BaseModel):
 
     conversationId: str = Field(..., description="会话 ID")
     content: str = Field(..., description="用户消息内容")
+    agentId: str | None = Field(default=None, description="Agent ID（平台化后使用）")
     modelCode: str | None = Field(default=None, description="模型编码（保留兼容）")
     modelId: str | None = Field(
         default=None, description="用户模型 ID，传此参数则使用用户自定义模型"
@@ -90,6 +92,7 @@ class ConversationVo(BaseModel):
     title: str | None = Field(default=None, description="会话标题")
     userId: SnowflakeId = Field(..., description="拥有者 ID")
     modelCode: str | None = Field(default=None, description="默认模型编码")
+    agentId: SnowflakeId | None = Field(default=None, description="绑定的 Agent ID")
     lastMessageId: SnowflakeId | None = Field(default=None, description="最后一条消息 ID")
     lastMessageAt: str | None = Field(default=None, description="最后消息时间 ISO8601")
     avatar: str | None = Field(default=None, description="会话头像")
@@ -103,7 +106,10 @@ class StreamChatEvent(BaseModel):
     因此保持 str 类型即可。
     """
 
-    type: str = Field(..., description="事件类型：chunk/done/error")
+    type: str = Field(
+        ...,
+        description="事件类型：chunk/done/error/tool_start/tool_end/agent_start/agent_end/agent_output",
+    )
     content: str | None = Field(default=None, description="内容片段")
     messageId: str | None = Field(default=None, description="消息 ID")
     conversationId: str | None = Field(default=None, description="会话 ID")

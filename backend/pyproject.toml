@@ -37,6 +37,8 @@ dependencies = [
     "jieba>=0.42.1", # 中文分词
     "langchain-community>=0.3.0", # 社区 DocumentLoaders
     "langchain-text-splitters>=0.3.0", # 文本分块器
+    # MCP 工具接入（HTTP）
+    "fastmcp==3.0.0b1",
     # Celery 消息队列
     "celery[redis]>=5.4.0",
     # 加密

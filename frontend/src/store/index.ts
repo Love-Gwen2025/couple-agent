@@ -27,6 +27,12 @@ export {
 } from './modelStore';
 
 export {
+  useAgentStore,
+  useAgents,
+  useCurrentAgentId,
+} from './agentStore';
+
+export {
   useUIStore,
   useTheme,
   useSidebarOpen,
@@ -52,6 +58,7 @@ export { checkAndMigrate, rollbackMigration } from './migration';
 import { useAuthStore } from './authStore';
 import { useConversationStore } from './conversationStore';
 import { useModelStore } from './modelStore';
+import { useAgentStore } from './agentStore';
 import { useUIStore } from './uiStore';
 import { useNavigationStore, type PageType } from './navigationStore';
 import type { User, Conversation, Message, AiModel } from '../types';
@@ -68,6 +75,7 @@ interface AppState {
   models: AiModel[];
   currentModelCode: string | null;
   currentModelId: string | null;
+  currentAgentId: string | null;
   sidebarOpen: boolean;
   isLoading: boolean;
   streamingContent: string;
@@ -92,6 +100,7 @@ interface AppActions {
   setModels: (models: AiModel[]) => void;
   setCurrentModelCode: (code: string | null) => void;
   setCurrentModelId: (id: string | null) => void;
+  setCurrentAgentId: (id: string | null) => void;
   setCurrentCheckpointId: (checkpointId: string | null) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
@@ -124,6 +133,7 @@ export function useAppStore<T>(selector?: (state: AppState & AppActions) => T) {
   const authState = useAuthStore();
   const conversationState = useConversationStore();
   const modelState = useModelStore();
+  const agentState = useAgentStore();
   const uiState = useUIStore();
   const navigationState = useNavigationStore();
 
@@ -166,6 +176,10 @@ export function useAppStore<T>(selector?: (state: AppState & AppActions) => T) {
     setModels: modelState.setModels,
     setCurrentModelCode: modelState.setCurrentModelCode,
     setCurrentModelId: modelState.setCurrentModelId,
+
+    // AgentStore 状态
+    currentAgentId: agentState.currentAgentId,
+    setCurrentAgentId: agentState.setCurrentAgentId,
 
     // UIStore 状态
     sidebarOpen: uiState.sidebarOpen,

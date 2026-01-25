@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 
 /** 页面类型 */
-export type PageType = 'chat' | 'model-settings' | 'knowledge' | 'knowledge-detail';
+export type PageType = 'chat' | 'model-settings' | 'knowledge' | 'knowledge-detail' | 'agents' | 'tools';
 
 /** 导航状态接口 */
 interface NavigationState {

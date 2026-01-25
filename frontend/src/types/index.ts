@@ -28,6 +28,7 @@ export interface Conversation {
   title: string;
   userId?: string;
   modelCode?: string;
+  agentId?: string;
   lastMessageId?: string;
   lastMessageAt?: string;
   avatar?: string;
@@ -142,12 +143,15 @@ export interface UserModelTestResult {
 export interface CreateConversationParams {
   title?: string;
   modelCode?: string;
+  agentId?: string;
 }
 
 /** 流式聊天请求参数 */
 export interface StreamChatRequest {
   conversationId: string;
   content: string;
+  /** Agent ID（平台化后使用） */
+  agentId?: string;
   modelCode?: string;
   /** 用户模型 ID，传此参数则使用用户自定义模型 */
   modelId?: string;
@@ -164,7 +168,15 @@ export interface StreamChatRequest {
 
 /** 流式聊天事件 */
 export interface StreamChatEvent {
-  type: 'chunk' | 'done' | 'error' | 'tool_start' | 'tool_end';
+  type:
+    | 'chunk'
+    | 'done'
+    | 'error'
+    | 'tool_start'
+    | 'tool_end'
+    | 'agent_start'
+    | 'agent_end'
+    | 'agent_output';
   content?: string;
   messageId?: string;
   conversationId?: string;
@@ -176,8 +188,127 @@ export interface StreamChatEvent {
   userMessageId?: string;
   /** 工具名称（tool_start/tool_end 事件时使用） */
   tool?: string;
+  /** 工具引用（后端平台化输出） */
+  toolRef?: string;
+  /** 工具显示名（后端平台化输出） */
+  toolDisplayName?: string;
+  /** 当前事件所属 Agent */
+  agentId?: string;
+  agentName?: string;
+  agentKind?: string;
+  /** team 内部角色：supervisor/worker/single */
+  role?: string;
+  parentAgentId?: string;
+  status?: string;
   /** 新生成的会话标题（首次发消息时返回） */
   title?: string;
+}
+
+/** 前端过程事件（在 StreamChatEvent 基础上附加接收时间） */
+export interface TraceItem extends StreamChatEvent {
+  receivedAt: number;
+}
+
+/** 工具目录项 */
+export interface ToolItem {
+  toolRef: string;
+  type: 'builtin' | 'mcp';
+  name: string;
+  displayName?: string;
+  description?: string;
+  enabled: boolean;
+  inputSchema?: Record<string, unknown> | null;
+}
+
+/** Agent 配置 */
+export interface Agent {
+  id: string;
+  userId: string;
+  kind: 'single' | 'team';
+  name: string;
+  description?: string | null;
+  systemPrompt?: string | null;
+  userModelId: string;
+  status: number;
+  toolRefs: string[];
+  knowledgeBaseIds: string[];
+  memberAgentIds: string[];
+  createTime?: string | null;
+  updateTime?: string | null;
+}
+
+/** Agent 创建参数 */
+export interface AgentPayload {
+  kind?: 'single' | 'team';
+  name: string;
+  description?: string | null;
+  systemPrompt?: string | null;
+  userModelId: string;
+  status?: number;
+  toolRefs?: string[];
+  knowledgeBaseIds?: string[];
+  memberAgentIds?: string[];
+}
+
+/** Agent 更新参数 */
+export interface AgentUpdatePayload {
+  kind?: 'single' | 'team';
+  name?: string;
+  description?: string | null;
+  systemPrompt?: string | null;
+  userModelId?: string;
+  status?: number;
+  toolRefs?: string[];
+  knowledgeBaseIds?: string[];
+  memberAgentIds?: string[];
+}
+
+/** MCP Server */
+export interface McpServer {
+  id: string;
+  userId: string;
+  name: string;
+  url: string;
+  status: number;
+  hasHeaders: boolean;
+  createTime?: string | null;
+  updateTime?: string | null;
+}
+
+export interface McpServerPayload {
+  name: string;
+  url: string;
+  status?: number;
+  headers?: Record<string, string>;
+}
+
+export interface McpServerUpdatePayload {
+  name?: string;
+  url?: string;
+  status?: number;
+  headers?: Record<string, string>;
+}
+
+export interface McpTool {
+  id: string;
+  serverId: string;
+  name: string;
+  description?: string | null;
+  inputSchema?: Record<string, unknown> | null;
+  enabled: boolean;
+  createTime?: string | null;
+  updateTime?: string | null;
+}
+
+export interface McpToolTestPayload {
+  arguments: Record<string, unknown>;
+}
+
+export interface McpToolTestResult {
+  success: boolean;
+  isError: boolean;
+  data?: unknown;
+  text?: string | null;
 }
 
 /** 消息历史响应 */

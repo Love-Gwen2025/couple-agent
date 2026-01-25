@@ -3,8 +3,10 @@
  */
 export { MessageBubble } from './MessageBubble';
 export { ChatInput } from './ChatInput';
+export { AgentSelector } from './AgentSelector';
 export { ModelSelector } from './ModelSelector';
 export { ChatPanel } from './ChatPanel';
 export { BranchNavigator } from './BranchNavigator';
 export { GreetingScreen, type GreetingScreenProps } from './GreetingScreen';
 export { MessageList, type MessageListProps, type SiblingInfo } from './MessageList';
+export { TracePanel } from './TracePanel';

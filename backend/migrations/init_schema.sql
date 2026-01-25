@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS t_conversation (
     user_id BIGINT NOT NULL,
     title VARCHAR(255),
     model_code VARCHAR(50),
+    agent_id BIGINT,
     last_message_id BIGINT,
     last_message_at TIMESTAMP,
     ext JSONB,
@@ -58,13 +59,19 @@ CREATE TABLE IF NOT EXISTS t_conversation (
     version INTEGER DEFAULT 0
 );
 
+-- 兼容已有数据库：先补充 agent_id 字段（必须在创建索引之前）
+ALTER TABLE t_conversation
+    ADD COLUMN IF NOT EXISTS agent_id BIGINT;
+
 CREATE INDEX IF NOT EXISTS idx_conversation_user_id ON t_conversation(user_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_last_message_at ON t_conversation(last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversation_agent_id ON t_conversation(agent_id);
 
 COMMENT ON TABLE t_conversation IS '会话表';
 COMMENT ON COLUMN t_conversation.user_id IS '所属用户 ID';
 COMMENT ON COLUMN t_conversation.title IS '会话标题';
 COMMENT ON COLUMN t_conversation.model_code IS '使用的模型编码';
+COMMENT ON COLUMN t_conversation.agent_id IS '绑定的 Agent ID（平台化后使用）';
 COMMENT ON COLUMN t_conversation.ext IS '扩展信息（JSON）';
 
 
@@ -262,8 +269,136 @@ COMMENT ON COLUMN t_user_model.top_p IS 'Top P 核采样参数 (0-1)';
 COMMENT ON COLUMN t_user_model.max_tokens IS '最大输出 token 数';
 COMMENT ON COLUMN t_user_model.top_k IS 'Top K 参数，Gemini 专用';
 
+-- =============================================
+-- 9. Agent 表 (t_agent)
+-- =============================================
+CREATE TABLE IF NOT EXISTS t_agent (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    kind VARCHAR(20) NOT NULL DEFAULT 'single',
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    system_prompt TEXT,
+    user_model_id BIGINT NOT NULL,
+    status INTEGER DEFAULT 1,
+    create_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    update_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    version INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_user_id ON t_agent(user_id);
+CREATE INDEX IF NOT EXISTS idx_agent_kind ON t_agent(kind);
+CREATE INDEX IF NOT EXISTS idx_agent_user_model_id ON t_agent(user_model_id);
+
+COMMENT ON TABLE t_agent IS '用户自定义 Agent（执行单位）';
+COMMENT ON COLUMN t_agent.kind IS 'Agent 类型: single/team';
+COMMENT ON COLUMN t_agent.system_prompt IS '系统提示词';
+COMMENT ON COLUMN t_agent.user_model_id IS '绑定的用户模型 ID';
+
+
+-- =============================================
+-- 10. Agent-Tool 绑定表 (t_agent_tool)
+-- =============================================
+CREATE TABLE IF NOT EXISTS t_agent_tool (
+    id BIGINT PRIMARY KEY,
+    agent_id BIGINT NOT NULL,
+    tool_ref VARCHAR(200) NOT NULL,
+    create_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    update_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    version INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_tool_agent_id ON t_agent_tool(agent_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_agent_tool ON t_agent_tool(agent_id, tool_ref);
+
+COMMENT ON TABLE t_agent_tool IS 'Agent 绑定的工具列表';
+COMMENT ON COLUMN t_agent_tool.tool_ref IS '工具引用: builtin:<name> / mcp:<toolId>';
+
+
+-- =============================================
+-- 11. Agent-知识库绑定表 (t_agent_kb)
+-- =============================================
+CREATE TABLE IF NOT EXISTS t_agent_kb (
+    id BIGINT PRIMARY KEY,
+    agent_id BIGINT NOT NULL,
+    knowledge_base_id BIGINT NOT NULL,
+    create_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    update_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    version INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_kb_agent_id ON t_agent_kb(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_kb_kb_id ON t_agent_kb(knowledge_base_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_agent_kb ON t_agent_kb(agent_id, knowledge_base_id);
+
+COMMENT ON TABLE t_agent_kb IS 'Agent 绑定的知识库列表';
+
+
+-- =============================================
+-- 12. Team Agent 成员表 (t_agent_member)
+-- =============================================
+CREATE TABLE IF NOT EXISTS t_agent_member (
+    id BIGINT PRIMARY KEY,
+    team_agent_id BIGINT NOT NULL,
+    member_agent_id BIGINT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    create_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    update_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    version INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_member_team_id ON t_agent_member(team_agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_member_member_id ON t_agent_member(member_agent_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_agent_member ON t_agent_member(team_agent_id, member_agent_id);
+
+COMMENT ON TABLE t_agent_member IS 'Team Agent 的成员（workers）';
+
+
+-- =============================================
+-- 13. MCP Server 表 (t_mcp_server)
+-- =============================================
+CREATE TABLE IF NOT EXISTS t_mcp_server (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    url VARCHAR(500) NOT NULL,
+    headers_encrypted TEXT,
+    status INTEGER DEFAULT 1,
+    create_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    update_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    version INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_server_user_id ON t_mcp_server(user_id);
+CREATE INDEX IF NOT EXISTS idx_mcp_server_status ON t_mcp_server(status);
+
+COMMENT ON TABLE t_mcp_server IS '用户注册的 MCP Server（仅 HTTP）';
+
+
+-- =============================================
+-- 14. MCP Tool 表 (t_mcp_tool)
+-- =============================================
+CREATE TABLE IF NOT EXISTS t_mcp_tool (
+    id BIGINT PRIMARY KEY,
+    server_id BIGINT NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    input_schema JSONB,
+    enabled BOOLEAN DEFAULT TRUE,
+    create_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    update_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    version INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_tool_server_id ON t_mcp_tool(server_id);
+CREATE INDEX IF NOT EXISTS idx_mcp_tool_enabled ON t_mcp_tool(enabled);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_mcp_tool ON t_mcp_tool(server_id, name);
+
+COMMENT ON TABLE t_mcp_tool IS 'MCP Server 同步的工具元数据';
+COMMENT ON COLUMN t_mcp_tool.input_schema IS 'MCP tool 输入 schema(JSON)';
+
 
 -- =============================================
 -- 完成
 -- =============================================
-SELECT '✅ 数据库初始化完成！共创建 8 张表' AS result;
+SELECT '✅ 数据库初始化完成！共创建 14 张表' AS result;

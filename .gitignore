@@ -60,5 +60,5 @@ frontend/.env.local
 AGENTS.md
 CLAUDE.md
 GEMINI.md
-
+openspec/
 .ace-tool/

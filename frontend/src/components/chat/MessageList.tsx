@@ -6,8 +6,9 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { MessageBubble } from './MessageBubble';
-import { getToolDisplayName } from '../../hooks';
+import { TracePanel } from './TracePanel';
 import type { Message } from '../../types';
+import type { TraceItem } from '../../types';
 
 /** 分支信息 */
 export interface SiblingInfo {
@@ -26,6 +27,10 @@ export interface MessageListProps {
   streamingContent: string;
   /** 当前活动工具名称 */
   activeTool: string | null;
+  /** 已完成消息的过程记录：assistantMessageId -> trace events */
+  traceByMessageId?: Record<string, TraceItem[]>;
+  /** 当前流式回复的过程记录 */
+  streamTrace?: TraceItem[];
   /** 用户头像 */
   userAvatar?: string;
   /** 正在重新生成的消息 ID */
@@ -62,6 +67,8 @@ export function MessageList({
   conversationId,
   streamingContent,
   activeTool,
+  traceByMessageId,
+  streamTrace,
   userAvatar,
   regeneratingId,
   navLoadingId,
@@ -95,6 +102,11 @@ export function MessageList({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
+            {message.role === 'assistant' && traceByMessageId?.[String(message.id)] && (
+              <div className="mb-2">
+                <TracePanel events={traceByMessageId[String(message.id)]} />
+              </div>
+            )}
             <MessageBubble
               message={message}
               siblingInfo={
@@ -138,7 +150,7 @@ export function MessageList({
               aria-hidden="true"
             />
             <span className="gradient-text font-medium">
-              Running {getToolDisplayName(activeTool)}...
+              Running {activeTool}...
             </span>
           </motion.div>
         )}
@@ -146,6 +158,11 @@ export function MessageList({
         {/* 流式响应内容 */}
         {streamingContent && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            {streamTrace && streamTrace.length > 0 && (
+              <div className="mb-2">
+                <TracePanel events={streamTrace} />
+              </div>
+            )}
             <MessageBubble
               message={{
                 id: 'streaming',
