@@ -11,13 +11,20 @@ from app.core.db import get_db_session
 from app.dependencies.auth import CurrentUser, get_current_user
 from app.schema.agent import AgentPayload, AgentUpdatePayload, AgentVo
 from app.schema.base import ApiResult
+from app.schema.workflow import AgentWorkflowUpdatePayload, AgentWorkflowVo
 from app.services.agent_service import AgentService
+from app.services.workflow_service import WorkflowService
+from app.workflow.definition import WorkflowDefinition
 
 router = APIRouter(prefix="/agents", tags=["Agent"])
 
 
 def get_agent_service(db: AsyncSession = Depends(get_db_session)) -> AgentService:
     return AgentService(db)
+
+
+def get_workflow_service(db: AsyncSession = Depends(get_db_session)) -> WorkflowService:
+    return WorkflowService(db)
 
 
 @router.get("", response_model=ApiResult[list[AgentVo]])
@@ -105,3 +112,45 @@ async def delete_agent(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
+@router.get("/{agent_id}/workflow", response_model=ApiResult[AgentWorkflowVo])
+async def get_agent_workflow(
+    agent_id: str,
+    current: CurrentUser = Depends(get_current_user),
+    workflow_service: WorkflowService = Depends(get_workflow_service),
+) -> ApiResult[AgentWorkflowVo]:
+    try:
+        _, wf = await workflow_service.get_agent_default_workflow(current.id, int(agent_id))
+        definition = WorkflowDefinition(**(wf.definition_json or {}))
+        return ApiResult.ok(
+            AgentWorkflowVo(
+                workflowId=wf.id,
+                schemaVersion=wf.schema_version,
+                definition=definition,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/{agent_id}/workflow", response_model=ApiResult[AgentWorkflowVo])
+async def update_agent_workflow(
+    agent_id: str,
+    payload: AgentWorkflowUpdatePayload,
+    current: CurrentUser = Depends(get_current_user),
+    workflow_service: WorkflowService = Depends(get_workflow_service),
+) -> ApiResult[AgentWorkflowVo]:
+    try:
+        wf = await workflow_service.update_agent_workflow(
+            current.id, int(agent_id), payload.definition
+        )
+        definition = WorkflowDefinition(**(wf.definition_json or {}))
+        return ApiResult.ok(
+            AgentWorkflowVo(
+                workflowId=wf.id,
+                schemaVersion=wf.schema_version,
+                definition=definition,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

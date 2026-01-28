@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS t_conversation (
     title VARCHAR(255),
     model_code VARCHAR(50),
     agent_id BIGINT,
+    workflow_id BIGINT,
     last_message_id BIGINT,
     last_message_at TIMESTAMP,
     ext JSONB,
@@ -63,15 +64,21 @@ CREATE TABLE IF NOT EXISTS t_conversation (
 ALTER TABLE t_conversation
     ADD COLUMN IF NOT EXISTS agent_id BIGINT;
 
+-- 兼容已有数据库：补充 workflow_id 字段（用于会话执行快照绑定）
+ALTER TABLE t_conversation
+    ADD COLUMN IF NOT EXISTS workflow_id BIGINT;
+
 CREATE INDEX IF NOT EXISTS idx_conversation_user_id ON t_conversation(user_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_last_message_at ON t_conversation(last_message_at DESC);
 CREATE INDEX IF NOT EXISTS idx_conversation_agent_id ON t_conversation(agent_id);
+CREATE INDEX IF NOT EXISTS idx_conversation_workflow_id ON t_conversation(workflow_id);
 
 COMMENT ON TABLE t_conversation IS '会话表';
 COMMENT ON COLUMN t_conversation.user_id IS '所属用户 ID';
 COMMENT ON COLUMN t_conversation.title IS '会话标题';
 COMMENT ON COLUMN t_conversation.model_code IS '使用的模型编码';
 COMMENT ON COLUMN t_conversation.agent_id IS '绑定的 Agent ID（平台化后使用）';
+COMMENT ON COLUMN t_conversation.workflow_id IS '绑定的 Workflow 版本 ID（会话内写死）';
 COMMENT ON COLUMN t_conversation.ext IS '扩展信息（JSON）';
 
 
@@ -280,24 +287,51 @@ CREATE TABLE IF NOT EXISTS t_agent (
     description TEXT,
     system_prompt TEXT,
     user_model_id BIGINT NOT NULL,
+    default_workflow_id BIGINT,
     status INTEGER DEFAULT 1,
     create_time TIMESTAMP DEFAULT NOW() NOT NULL,
     update_time TIMESTAMP DEFAULT NOW() NOT NULL,
     version INTEGER DEFAULT 0
 );
 
+ALTER TABLE t_agent
+    ADD COLUMN IF NOT EXISTS default_workflow_id BIGINT;
+
 CREATE INDEX IF NOT EXISTS idx_agent_user_id ON t_agent(user_id);
 CREATE INDEX IF NOT EXISTS idx_agent_kind ON t_agent(kind);
 CREATE INDEX IF NOT EXISTS idx_agent_user_model_id ON t_agent(user_model_id);
+CREATE INDEX IF NOT EXISTS idx_agent_default_workflow_id ON t_agent(default_workflow_id);
 
 COMMENT ON TABLE t_agent IS '用户自定义 Agent（执行单位）';
 COMMENT ON COLUMN t_agent.kind IS 'Agent 类型: single/team';
 COMMENT ON COLUMN t_agent.system_prompt IS '系统提示词';
 COMMENT ON COLUMN t_agent.user_model_id IS '绑定的用户模型 ID';
+COMMENT ON COLUMN t_agent.default_workflow_id IS '默认 Workflow 版本 ID（仅 single 生效）';
 
 
 -- =============================================
--- 10. Agent-Tool 绑定表 (t_agent_tool)
+-- 10. Agent Workflow 表 (t_agent_workflow)
+-- =============================================
+CREATE TABLE IF NOT EXISTS t_agent_workflow (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    agent_id BIGINT NOT NULL,
+    schema_version INTEGER NOT NULL DEFAULT 1,
+    definition_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    create_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    update_time TIMESTAMP DEFAULT NOW() NOT NULL,
+    version INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_workflow_user_id ON t_agent_workflow(user_id);
+CREATE INDEX IF NOT EXISTS idx_agent_workflow_agent_id ON t_agent_workflow(agent_id);
+
+COMMENT ON TABLE t_agent_workflow IS 'Agent 内部可执行 Workflow（版本表，append-only）';
+COMMENT ON COLUMN t_agent_workflow.schema_version IS 'Workflow definition schema 版本';
+
+
+-- =============================================
+-- 11. Agent-Tool 绑定表 (t_agent_tool)
 -- =============================================
 CREATE TABLE IF NOT EXISTS t_agent_tool (
     id BIGINT PRIMARY KEY,
@@ -316,7 +350,7 @@ COMMENT ON COLUMN t_agent_tool.tool_ref IS '工具引用: builtin:<name> / mcp:<
 
 
 -- =============================================
--- 11. Agent-知识库绑定表 (t_agent_kb)
+-- 12. Agent-知识库绑定表 (t_agent_kb)
 -- =============================================
 CREATE TABLE IF NOT EXISTS t_agent_kb (
     id BIGINT PRIMARY KEY,
@@ -335,7 +369,7 @@ COMMENT ON TABLE t_agent_kb IS 'Agent 绑定的知识库列表';
 
 
 -- =============================================
--- 12. Team Agent 成员表 (t_agent_member)
+-- 13. Team Agent 成员表 (t_agent_member)
 -- =============================================
 CREATE TABLE IF NOT EXISTS t_agent_member (
     id BIGINT PRIMARY KEY,
@@ -355,7 +389,7 @@ COMMENT ON TABLE t_agent_member IS 'Team Agent 的成员（workers）';
 
 
 -- =============================================
--- 13. MCP Server 表 (t_mcp_server)
+-- 14. MCP Server 表 (t_mcp_server)
 -- =============================================
 CREATE TABLE IF NOT EXISTS t_mcp_server (
     id BIGINT PRIMARY KEY,
@@ -376,7 +410,7 @@ COMMENT ON TABLE t_mcp_server IS '用户注册的 MCP Server（仅 HTTP）';
 
 
 -- =============================================
--- 14. MCP Tool 表 (t_mcp_tool)
+-- 15. MCP Tool 表 (t_mcp_tool)
 -- =============================================
 CREATE TABLE IF NOT EXISTS t_mcp_tool (
     id BIGINT PRIMARY KEY,

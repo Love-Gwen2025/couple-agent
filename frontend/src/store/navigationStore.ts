@@ -6,7 +6,14 @@
 import { create } from 'zustand';
 
 /** 页面类型 */
-export type PageType = 'chat' | 'model-settings' | 'knowledge' | 'knowledge-detail' | 'agents' | 'tools';
+export type PageType =
+  | 'chat'
+  | 'model-settings'
+  | 'knowledge'
+  | 'knowledge-detail'
+  | 'agents'
+  | 'tools'
+  | 'agent-workflow';
 
 /** 导航状态接口 */
 interface NavigationState {
@@ -14,6 +21,8 @@ interface NavigationState {
   currentPage: PageType;
   /** 选中的知识库ID（用于详情页） */
   selectedKnowledgeBaseId: string | null;
+  /** 选中的 Agent ID（用于 workflow 设计器） */
+  selectedWorkflowAgentId: string | null;
 }
 
 /** 导航操作接口 */
@@ -26,6 +35,10 @@ interface NavigationActions {
   openKnowledgeDetail: (id: string) => void;
   /** 返回知识库列表 */
   backToKnowledgeList: () => void;
+  /** 打开 Agent workflow 设计器 */
+  openAgentWorkflow: (agentId: string) => void;
+  /** 返回 Agents 列表 */
+  backToAgents: () => void;
 }
 
 /** 导航 Store */
@@ -34,6 +47,7 @@ export const useNavigationStore = create<NavigationState & NavigationActions>()(
     // 初始状态
     currentPage: 'chat',
     selectedKnowledgeBaseId: null,
+    selectedWorkflowAgentId: null,
 
     // 操作方法
     setCurrentPage: (page) => set({ currentPage: page }),
@@ -51,6 +65,18 @@ export const useNavigationStore = create<NavigationState & NavigationActions>()(
         currentPage: 'knowledge',
         selectedKnowledgeBaseId: null,
       }),
+
+    openAgentWorkflow: (agentId) =>
+      set({
+        currentPage: 'agent-workflow',
+        selectedWorkflowAgentId: agentId,
+      }),
+
+    backToAgents: () =>
+      set({
+        currentPage: 'agents',
+        selectedWorkflowAgentId: null,
+      }),
   })
 );
 
@@ -59,3 +85,6 @@ export const useCurrentPage = () => useNavigationStore((state) => state.currentP
 
 export const useSelectedKnowledgeBaseId = () =>
   useNavigationStore((state) => state.selectedKnowledgeBaseId);
+
+export const useSelectedWorkflowAgentId = () =>
+  useNavigationStore((state) => state.selectedWorkflowAgentId);

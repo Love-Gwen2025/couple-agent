@@ -21,6 +21,7 @@ class Agent(Base):
     description: Mapped[str | None] = mapped_column(Text)
     system_prompt: Mapped[str | None] = mapped_column(Text)
     user_model_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    default_workflow_id: Mapped[int | None] = mapped_column(BigInteger)
     status: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     def to_vo(self) -> dict:
@@ -32,8 +33,8 @@ class Agent(Base):
             "description": self.description,
             "systemPrompt": self.system_prompt,
             "userModelId": self.user_model_id,
+            "defaultWorkflowId": self.default_workflow_id,
             "status": self.status,
             "createTime": self.create_time.isoformat() if self.create_time else None,
             "updateTime": self.update_time.isoformat() if self.update_time else None,
         }
-

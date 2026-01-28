@@ -8,7 +8,7 @@ import { ChatPanel } from '../chat';
 import { useNavigationStore } from '../../store';
 import { KnowledgePage, KnowledgeDetailPage } from '../knowledge';
 import { ModelSettingsPage } from '../settings';
-import { AgentsPage } from '../agents';
+import { AgentsPage, AgentWorkflowDesignerPage } from '../agents';
 import { ToolsPage } from '../tools';
 import { Bot, Database, Users, Wrench } from 'lucide-react';
 
@@ -39,6 +39,7 @@ export function MainLayout() {
         {currentPage === 'knowledge-detail' && <KnowledgeDetailPage />}
         {currentPage === 'model-settings' && <ModelSettingsPage />}
         {currentPage === 'agents' && <AgentsPage />}
+        {currentPage === 'agent-workflow' && <AgentWorkflowDesignerPage />}
         {currentPage === 'tools' && <ToolsPage />}
       </main>
 

@@ -15,6 +15,7 @@ from app.models.agent import Agent
 from app.models.agent_kb import AgentKnowledgeBase
 from app.models.agent_member import AgentMember
 from app.models.agent_tool import AgentTool
+from app.models.agent_workflow import AgentWorkflow
 from app.models.mcp_server import McpServer
 from app.models.mcp_tool import McpTool
 from app.models.user import User
@@ -34,6 +35,7 @@ __all__ = [
     "AgentTool",
     "AgentKnowledgeBase",
     "AgentMember",
+    "AgentWorkflow",
     "McpServer",
     "McpTool",
 ]

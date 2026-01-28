@@ -25,8 +25,12 @@ from app.services.conversation_service import ConversationService
 from app.services.embedding_service import EmbeddingService
 from app.services.langfuse_service import get_langfuse_service
 from app.services.model_service import ModelService
+from app.services.workflow_service import WorkflowService
 from app.tasks.embedding_tasks import store_message_embedding_task
 from app.utils.content import extract_text_content
+from app.workflow.compiler import compile_validated_workflow
+from app.workflow.definition import WorkflowDefinition
+from app.workflow.validation import validate_workflow_definition
 
 # 系统提示词
 SYSTEM_PROMPT = """你是一个智能助手。
@@ -180,6 +184,61 @@ class ChatService:
             conversation.agent_id = agent_id
             await self.conversation_service.db.commit()
 
+    async def _ensure_execution_spec(
+        self,
+        conversation,
+        user_id: int,
+        db: AsyncSession | None,
+    ) -> dict | None:
+        """
+        确保会话已写入执行快照（ExecutionSpec）。
+
+        - 仅对 kind=single Agent 生效
+        - 一旦写入，后续会话执行必须使用该快照（避免 Agent 配置漂移）
+        """
+        ext = dict(conversation.ext or {})
+        existing = ext.get("executionSpec")
+        if existing:
+            workflow_id = existing.get("workflowId")
+            if workflow_id and conversation.workflow_id is None:
+                conversation.workflow_id = int(workflow_id)
+                await self.conversation_service.db.commit()
+            if workflow_id and conversation.workflow_id and int(workflow_id) != int(conversation.workflow_id):
+                raise ValueError("会话 workflow_id 与 executionSpec.workflowId 不一致")
+            return existing
+
+        if conversation.agent_id is None:
+            return None
+
+        if not db:
+            raise ValueError("当前会话已绑定 Agent，但缺少数据库会话，无法执行。")
+
+        agent_service = AgentService(db)
+        agent = await agent_service.get_agent(user_id, int(conversation.agent_id))
+        if not agent:
+            raise ValueError("Agent 不存在或无权限")
+
+        # team Agent 首期不写入 workflow 执行快照（后续做 B 时再扩展）
+        if agent.kind != "single":
+            return None
+
+        workflow_service = WorkflowService(db)
+        execution_spec = await workflow_service.build_execution_spec(user_id, int(conversation.agent_id))
+
+        # 若会话已显式绑定 workflow_id，则以会话为准（保持回放一致性）
+        if conversation.workflow_id:
+            wf = await workflow_service.get_workflow(user_id, int(conversation.workflow_id))
+            if not wf:
+                raise ValueError("会话绑定的 workflow 不存在或无权限")
+            execution_spec["workflowId"] = int(conversation.workflow_id)
+            execution_spec["workflowSchemaVersion"] = int(wf.schema_version)
+
+        ext["executionSpec"] = execution_spec
+        conversation.ext = ext
+        conversation.workflow_id = int(execution_spec["workflowId"])
+        await self.conversation_service.db.commit()
+        return execution_spec
+
     async def _generate_title_if_needed(
         self,
         conversation,
@@ -195,6 +254,9 @@ class ChatService:
 
         # 优先使用 Agent 绑定模型生成标题
         title_model_id = model_id
+        execution_spec = (conversation.ext or {}).get("executionSpec")
+        if not title_model_id and execution_spec and execution_spec.get("userModelId"):
+            title_model_id = str(execution_spec.get("userModelId"))
         if not title_model_id and agent_id and db:
             agent_service = AgentService(db)
             agent = await agent_service.get_agent(user_id, agent_id)
@@ -265,6 +327,9 @@ class ChatService:
         conversation = await self.conversation_service.ensure_owner(conversation_id, user_id)
 
         await self._bind_agent_to_conversation(conversation, agent_id)
+
+        # 绑定后立即写入执行快照（single Agent），确保会话内配置不漂移
+        await self._ensure_execution_spec(conversation, user_id, db)
 
         generated_title = await self._generate_title_if_needed(
             conversation, content, user_id, agent_id, model_id, db
@@ -387,15 +452,9 @@ class ChatService:
                 else:
                     # ========== 单 Agent ==========
                     if agent.kind == "single":
-                        tools, tool_meta = await build_tools_for_tool_refs(
-                            db, user_id, agent_cfg["toolRefs"]
-                        )
-                        model = await self._get_model_for_user(
-                            user_id, str(agent.user_model_id), db
-                        )
-
-                        if not model:
-                            fallback = "Agent 绑定的模型不可用，请检查模型配置。"
+                        execution_spec = (conversation.ext or {}).get("executionSpec") or {}
+                        if not execution_spec:
+                            fallback = "该会话缺少可执行的 workflow 执行快照，无法执行。"
                             full_reply.append(fallback)
                             yield self._format_sse_event(
                                 "chunk",
@@ -404,133 +463,193 @@ class ChatService:
                                 messageId=placeholder_message_id,
                             )
                         else:
-                            async with create_checkpointer(self.settings) as checkpointer:
-                                graph = create_agent_graph(
-                                    model=model,
-                                    tools=tools,
-                                    checkpointer=checkpointer,
-                                    enable_rewrite=True,
-                                )
+                            tool_refs = list(execution_spec.get("toolRefs") or [])
+                            kb_ids = [int(x) for x in (execution_spec.get("knowledgeBaseIds") or [])]
+                            workflow_id = execution_spec.get("workflowId")
 
-                                if regenerate and parent_checkpoint_id:
-                                    input_messages = []
-                                else:
-                                    input_messages = [
-                                        SystemMessage(
-                                            content=agent.system_prompt or SYSTEM_PROMPT,
-                                            id="sys_instruction",
-                                        ),
-                                        HumanMessage(content=content),
-                                    ]
+                            tools, tool_meta = await build_tools_for_tool_refs(db, user_id, tool_refs)
+                            model = await self._get_model_for_user(
+                                user_id, str(execution_spec.get("userModelId")), db
+                            )
 
-                                graph_input = {
-                                    "messages": input_messages,
-                                    "mode": mode,
-                                    "question": content,
-                                    "search_queries": [],
-                                    "references": {},
-                                    "planning_rounds": 0,
-                                    "knowledge_base_ids": agent_cfg["knowledgeBaseIds"] or [],
-                                    "history_context": "",
-                                    "kb_context": "",
-                                }
-
+                            if not model:
+                                fallback = "Agent 绑定的模型不可用，请检查模型配置。"
+                                full_reply.append(fallback)
                                 yield self._format_sse_event(
-                                    "agent_start",
+                                    "chunk",
                                     conversation_id,
-                                    agentId=str(agent.id),
-                                    agentName=agent.name,
-                                    agentKind=agent.kind,
-                                    role="single",
+                                    content=fallback,
+                                    messageId=placeholder_message_id,
                                 )
-
-                                langfuse_service = get_langfuse_service(self.settings)
-                                langfuse_handler = langfuse_service.get_callback_handler(
-                                    user_id=str(user_id) if user_id else None,
-                                    session_id=str(conversation_id),
-                                    trace_name=f"{mode}_agent",
-                                    metadata={
-                                        "mode": mode,
-                                        "regenerate": regenerate,
-                                        "agentId": str(agent.id),
-                                    },
+                            elif not workflow_id:
+                                fallback = "会话未绑定 workflowId，无法执行。"
+                                full_reply.append(fallback)
+                                yield self._format_sse_event(
+                                    "chunk",
+                                    conversation_id,
+                                    content=fallback,
+                                    messageId=placeholder_message_id,
                                 )
-                                if langfuse_handler:
-                                    config["callbacks"] = [langfuse_handler]
+                            else:
+                                workflow_service = WorkflowService(db)
+                                wf = await workflow_service.get_workflow(user_id, int(workflow_id))
+                                if not wf:
+                                    fallback = "会话绑定的 workflow 不存在或无权限，无法执行。"
+                                    full_reply.append(fallback)
+                                    yield self._format_sse_event(
+                                        "chunk",
+                                        conversation_id,
+                                        content=fallback,
+                                        messageId=placeholder_message_id,
+                                    )
+                                else:
+                                    definition = WorkflowDefinition(**(wf.definition_json or {}))
+                                    validated = validate_workflow_definition(definition)
 
-                                async for event in graph.astream_events(
-                                    graph_input, config=config, version="v2"
-                                ):
-                                    kind = event.get("event", "")
+                                    async with create_checkpointer(self.settings) as checkpointer:
+                                        graph, output_node_id = compile_validated_workflow(
+                                            validated,
+                                            model=model,
+                                            tools=tools,
+                                            checkpointer=checkpointer,
+                                            settings=self.settings,
+                                        )
 
-                                    if kind == "on_chat_model_stream":
-                                        metadata = event.get("metadata", {})
-                                        node_name = metadata.get("langgraph_node", "")
-                                        output_nodes = {"chatbot", "summary"}
-                                        if node_name and node_name not in output_nodes:
-                                            continue
+                                        if regenerate and parent_checkpoint_id:
+                                            input_messages = []
+                                        else:
+                                            input_messages = [
+                                                SystemMessage(
+                                                    content=execution_spec.get("systemPrompt")
+                                                    or SYSTEM_PROMPT,
+                                                    id="sys_instruction",
+                                                ),
+                                                HumanMessage(content=content),
+                                            ]
 
-                                        chunk = event.get("data", {}).get("chunk")
-                                        if chunk and hasattr(chunk, "content") and chunk.content:
-                                            token = extract_text_content(chunk.content)
-                                            if token:
-                                                full_reply.append(token)
+                                        graph_input = {
+                                            "messages": input_messages,
+                                            "mode": mode,
+                                            "knowledge_base_ids": kb_ids,
+                                            "history_context": "",
+                                            "kb_context": "",
+                                            "route": None,
+                                        }
+
+                                        yield self._format_sse_event(
+                                            "agent_start",
+                                            conversation_id,
+                                            agentId=str(execution_spec.get("agentId") or agent.id),
+                                            agentName=str(
+                                                execution_spec.get("agentName") or agent.name
+                                            ),
+                                            agentKind=str(
+                                                execution_spec.get("agentKind") or agent.kind
+                                            ),
+                                            role="single",
+                                        )
+
+                                        langfuse_service = get_langfuse_service(self.settings)
+                                        langfuse_handler = (
+                                            langfuse_service.get_callback_handler(
+                                                user_id=str(user_id) if user_id else None,
+                                                session_id=str(conversation_id),
+                                                trace_name=f"{mode}_agent",
+                                                metadata={
+                                                    "mode": mode,
+                                                    "regenerate": regenerate,
+                                                    "agentId": str(agent.id),
+                                                    "workflowId": str(workflow_id),
+                                                },
+                                            )
+                                            if langfuse_service
+                                            else None
+                                        )
+                                        if langfuse_handler:
+                                            config["callbacks"] = [langfuse_handler]
+
+                                        async for event in graph.astream_events(
+                                            graph_input, config=config, version="v2"
+                                        ):
+                                            kind = event.get("event", "")
+
+                                            if kind == "on_chat_model_stream":
+                                                metadata = event.get("metadata", {})
+                                                node_name = metadata.get("langgraph_node", "")
+                                                if node_name and node_name != output_node_id:
+                                                    continue
+
+                                                chunk = event.get("data", {}).get("chunk")
+                                                if (
+                                                    chunk
+                                                    and hasattr(chunk, "content")
+                                                    and chunk.content
+                                                ):
+                                                    token = extract_text_content(chunk.content)
+                                                    if token:
+                                                        full_reply.append(token)
+                                                        yield self._format_sse_event(
+                                                            "chunk",
+                                                            conversation_id,
+                                                            content=token,
+                                                            messageId=placeholder_message_id,
+                                                        )
+
+                                            elif kind == "on_tool_start":
+                                                tool_name = event.get("name", "unknown")
+                                                meta = tool_meta.get(tool_name, {})
                                                 yield self._format_sse_event(
-                                                    "chunk",
+                                                    "tool_start",
                                                     conversation_id,
-                                                    content=token,
-                                                    messageId=placeholder_message_id,
+                                                    tool=tool_name,
+                                                    toolRef=meta.get("toolRef"),
+                                                    toolDisplayName=meta.get("displayName"),
+                                                    agentId=str(agent.id),
+                                                    agentName=agent.name,
                                                 )
 
-                                    elif kind == "on_tool_start":
-                                        tool_name = event.get("name", "unknown")
-                                        meta = tool_meta.get(tool_name, {})
+                                            elif kind == "on_tool_end":
+                                                tool_name = event.get("name", "unknown")
+                                                meta = tool_meta.get(tool_name, {})
+                                                yield self._format_sse_event(
+                                                    "tool_end",
+                                                    conversation_id,
+                                                    tool=tool_name,
+                                                    toolRef=meta.get("toolRef"),
+                                                    toolDisplayName=meta.get("displayName"),
+                                                    agentId=str(agent.id),
+                                                    agentName=agent.name,
+                                                )
+
                                         yield self._format_sse_event(
-                                            "tool_start",
+                                            "agent_end",
                                             conversation_id,
-                                            tool=tool_name,
-                                            toolRef=meta.get("toolRef"),
-                                            toolDisplayName=meta.get("displayName"),
-                                            agentId=str(agent.id),
-                                            agentName=agent.name,
+                                            agentId=str(execution_spec.get("agentId") or agent.id),
+                                            agentName=str(
+                                                execution_spec.get("agentName") or agent.name
+                                            ),
+                                            agentKind=str(
+                                                execution_spec.get("agentKind") or agent.kind
+                                            ),
+                                            role="single",
+                                            status="success",
                                         )
 
-                                    elif kind == "on_tool_end":
-                                        tool_name = event.get("name", "unknown")
-                                        meta = tool_meta.get(tool_name, {})
-                                        yield self._format_sse_event(
-                                            "tool_end",
-                                            conversation_id,
-                                            tool=tool_name,
-                                            toolRef=meta.get("toolRef"),
-                                            toolDisplayName=meta.get("displayName"),
-                                            agentId=str(agent.id),
-                                            agentName=agent.name,
-                                        )
-
-                                yield self._format_sse_event(
-                                    "agent_end",
-                                    conversation_id,
-                                    agentId=str(agent.id),
-                                    agentName=agent.name,
-                                    agentKind=agent.kind,
-                                    role="single",
-                                    status="success",
-                                )
-
-                                # 获取最新 checkpoint
-                                config_for_list = {
-                                    "configurable": {"thread_id": str(conversation_id)}
-                                }
-                                try:
-                                    async for checkpoint_tuple in checkpointer.alist(
-                                        config_for_list, limit=1
-                                    ):
-                                        checkpoint = checkpoint_tuple.checkpoint or {}
-                                        latest_checkpoint_id = checkpoint.get("id")
-                                        break
-                                except Exception as exc:
-                                    logger.error(f"Failed to fetch latest checkpoint: {exc}")
+                                        # 获取最新 checkpoint
+                                        config_for_list = {
+                                            "configurable": {"thread_id": str(conversation_id)}
+                                        }
+                                        try:
+                                            async for checkpoint_tuple in checkpointer.alist(
+                                                config_for_list, limit=1
+                                            ):
+                                                checkpoint = checkpoint_tuple.checkpoint or {}
+                                                latest_checkpoint_id = checkpoint.get("id")
+                                                break
+                                        except Exception as exc:
+                                            logger.error(
+                                                f"Failed to fetch latest checkpoint: {exc}"
+                                            )
 
                     # ========== Team Agent ==========
                     else:

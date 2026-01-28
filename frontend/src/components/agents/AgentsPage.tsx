@@ -6,7 +6,7 @@
  * - 支持 team Agent 绑定成员（多 Agent 协作对外仍为一个 agentId）
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Edit2, Loader2, Plus, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Edit2, GitBranch, Loader2, Plus, Trash2, Users } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import clsx from 'clsx';
 import { useNavigationStore } from '../../store';
@@ -36,7 +36,7 @@ function uniqueStrings(items: string[]) {
 }
 
 export function AgentsPage() {
-  const { setCurrentPage } = useNavigationStore();
+  const { setCurrentPage, openAgentWorkflow } = useNavigationStore();
 
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tools, setTools] = useState<ToolItem[]>([]);
@@ -188,6 +188,19 @@ export function AgentsPage() {
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openAgentWorkflow(agent.id)}
+                          disabled={agent.kind !== 'single'}
+                          className={clsx(
+                            'p-2 rounded-lg transition-colors',
+                            agent.kind === 'single'
+                              ? 'hover:bg-surface-highlight/20 text-muted hover:text-foreground'
+                              : 'text-muted/40 cursor-not-allowed'
+                          )}
+                          title={agent.kind === 'single' ? '编辑 Workflow' : '仅 single Agent 支持 Workflow'}
+                        >
+                          <GitBranch className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => openEdit(agent.id)}
                           className="p-2 rounded-lg hover:bg-surface-highlight/20 transition-colors text-muted hover:text-foreground"

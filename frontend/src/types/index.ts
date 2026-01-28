@@ -263,6 +263,50 @@ export interface AgentUpdatePayload {
   memberAgentIds?: string[];
 }
 
+/** Workflow 节点类型 */
+export type WorkflowNodeType = 'start' | 'router' | 'context' | 'llm' | 'verify' | 'end';
+
+export interface WorkflowPosition {
+  x: number;
+  y: number;
+}
+
+export interface WorkflowNode {
+  id: string;
+  type: WorkflowNodeType;
+  label?: string | null;
+  config?: Record<string, unknown>;
+  position?: WorkflowPosition | null;
+}
+
+export interface WorkflowEdge {
+  id?: string | null;
+  source: string;
+  target: string;
+  /** 分支标签（仅 router 出边使用） */
+  case?: string | null;
+}
+
+export interface WorkflowDefinition {
+  schemaVersion: number;
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+}
+
+export interface NodeTypeCatalogItem {
+  type: WorkflowNodeType;
+  displayName: string;
+  description?: string | null;
+  configSchema?: Record<string, unknown> | null;
+  defaultConfig?: Record<string, unknown>;
+}
+
+export interface AgentWorkflow {
+  workflowId: string;
+  schemaVersion: number;
+  definition: WorkflowDefinition;
+}
+
 /** MCP Server */
 export interface McpServer {
   id: string;

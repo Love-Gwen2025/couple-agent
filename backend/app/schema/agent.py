@@ -11,6 +11,7 @@ class AgentVo(BaseModel):
     description: str | None = None
     systemPrompt: str | None = None
     userModelId: SnowflakeId
+    defaultWorkflowId: SnowflakeId | None = None
     status: int
     toolRefs: list[str] = Field(default_factory=list)
     knowledgeBaseIds: list[SnowflakeId] = Field(default_factory=list)
